@@ -1,0 +1,48 @@
+# Relevance filter: complaint category -> which records enter the context pack.
+# Simple, reviewable rules for the hackathon; production would use clinician-reviewed mappings.
+# Everything not selected here never reaches the LLM (data minimisation).
+categories:
+  respiratory:
+    keywords: [cough, kaszel, kaszl, wheez, phlegm, mucus, flegm, sore throat, gardl, chrypk, hoarse, sputum, breath, oddech]
+    symptoms: [dry cough, cough, heartburn, shortness of breath]
+    encounter_keywords: [cough, kaszel, respiratory, urti, bronch, throat, sinus]
+    document_keywords: [chest, x-ray, rtg, spirometr]
+    lab_loinc: []
+    lifestyle: [smoking, occupation, activity]
+    wearable: true
+  musculoskeletal:
+    keywords: [knee, kolan, back, plec, kregos, shoulder, bark, joint, staw, ankle, kostk, hip, biodr, muscle, miesn, neck, szyj, sprain]
+    symptoms: [muscle pain, muscle cramps, joint pain]
+    encounter_keywords: [sprain, knee, ankle, back, injury, skrecen, uraz, physio]
+    document_keywords: [x-ray, mri, usg, ultrasound]
+    lab_loinc: ["2160-0", "2157-6"]  # creatinine, CK
+    lifestyle: [activity, occupation]
+    wearable: true
+  headache:
+    keywords: [headache, head ache, migren, bol glowy, glowa, glowy, head]
+    symptoms: [headache, dizziness]
+    encounter_keywords: [headache, migraine, blood pressure, hypertension]
+    document_keywords: [ct, mri]
+    lab_loinc: []
+    lifestyle: [sleep, alcohol, occupation]
+    wearable: true
+  abdominal:
+    keywords: [stomach, abdomen, abdominal, brzuch, zoladek, nausea, nudnos, diarr, biegunk, heartburn, zgag]
+    symptoms: [heartburn, stomach pain, nausea, diarrhoea]
+    encounter_keywords: [abdominal, gastr, stomach, reflux]
+    document_keywords: [ultrasound, usg, endoscop]
+    lab_loinc: []
+    lifestyle: [alcohol, diet]
+    wearable: false
+  general:
+    keywords: []
+    symptoms: [tiredness]
+    encounter_keywords: []
+    document_keywords: []
+    lab_loinc: []
+    lifestyle: [sleep, activity, occupation]
+    wearable: true
+
+# Records from the clinic older than this are excluded unless they are active conditions/allergies.
+history_window_months: 36
+medication_window_months: 12

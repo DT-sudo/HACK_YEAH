@@ -1,0 +1,64 @@
+# Production-like topology from ARCHITECTURE.md: only `web` and `api` are exposed; FHIR, Postgres and
+# Redis sit on an internal network. For the quick demo you don't need this: see README (local run).
+services:
+  api:
+    build: ./backend
+    environment:
+      VC_DATABASE_URL: postgresql+psycopg://vitalcontext:vitalcontext@postgres:5432/vitalcontext
+      VC_FHIR_BACKEND: hapi
+      VC_FHIR_BASE_URL: http://hapi-fhir:8080/fhir
+      VC_REDIS_URL: redis://redis:6379/0
+      VC_JWT_SECRET: ${VC_JWT_SECRET:-change-me-in-production-please-long-random}
+      VC_CORS_ORIGINS: http://localhost:3000
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      hapi-fhir: { condition: service_started }
+      redis: { condition: service_started }
+    networks: [internal, edge]
+    restart: on-failure
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports: ["3000:3000"]
+    depends_on: [api]
+    networks: [edge]
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: vitalcontext
+      POSTGRES_PASSWORD: vitalcontext
+      POSTGRES_DB: vitalcontext
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vitalcontext"]
+      interval: 3s
+      retries: 20
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [internal]
+
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    environment:
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.client_id_strategy: ANY
+      hapi.fhir.allow_external_references: "true"
+    volumes: [hapidata:/data/hapi]
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    networks: [internal]
+
+networks:
+  internal:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata: {}
+  hapidata: {}

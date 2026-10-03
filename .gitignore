@@ -1,0 +1,9 @@
+.DS_Store
+.env
+*.db
+__pycache__/
+.venv/
+.pytest_cache/
+node_modules/
+.next/
+frontend/next-env.d.ts

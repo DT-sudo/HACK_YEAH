@@ -1,0 +1,110 @@
+# Emergency safety net. Deterministic rules, no LLM. Versioned and covered by tests
+# (tests/eval/test_red_flags.py). Patterns are regular expressions matched case-insensitively
+# against text with diacritics removed (so "bol w klatce" matches "ból w klatce").
+version: "2026-10-01"
+
+rules:
+  - id: chest_pain
+    label: Chest pain or pressure
+    patterns:
+      - "chest (pain|pains|ache|hurts|tightness|pressure)"
+      - "pain (in|across|around) (my |the )?chest"
+      - "(tight|heavy|crushing) (feeling in (my |the )?)?chest"
+      - "my chest (hurts|is tight|feels tight)"
+      - "bol (w|na) klat"
+      - "(ucisk|kłucie|klucie|pieczenie|gniecenie) w klat"
+      - "boli mnie (w )?klat"
+
+  - id: breathing
+    label: Breathing difficulty
+    patterns:
+      - "can'?t breathe"
+      - "cannot breathe"
+      - "(difficulty|trouble|struggling) (to )?breath"
+      - "short of breath (at|while|when) rest"
+      - "out of breath,? even (when|while|at) rest"
+      - "breathless (at|while) rest"
+      - "gasping for (air|breath)"
+      - "choking"
+      - "nie moge (zlapac )?(oddechu|oddychac)"
+      - "dusze sie"
+      - "brak(uje mi)? tchu"
+      - "duszno mi"
+
+  - id: fainting
+    label: Fainting or loss of consciousness
+    patterns:
+      - "faint(ed|ing)"
+      - "passed out"
+      - "(lost|losing) consciousness"
+      - "blacked out"
+      - "zemdlal"
+      - "stracil\\w* przytomnosc"
+
+  - id: stroke_signs
+    label: Possible stroke signs
+    patterns:
+      - "face (is )?(drooping|droops)"
+      - "slurred speech"
+      - "can'?t (move|feel) (my |one )?(arm|leg|side)"
+      - "one side of (my|the) (body|face)"
+      - "opada\\w* kacik"
+      - "belkot"
+
+  - id: cyanosis
+    label: Blue lips or face
+    patterns:
+      - "(lips|face) (are |is |turned |turning )?blue"
+      - "sine (usta|wargi)"
+
+  - id: anaphylaxis
+    label: Throat or tongue swelling
+    patterns:
+      - "throat (is )?(closing|swelling|swollen)"
+      - "(tongue|lips) (is |are )?(swelling|swollen)"
+      - "puchnie mi (gardlo|jezyk)"
+
+  - id: severe_bleeding
+    label: Heavy bleeding
+    patterns:
+      - "bleeding (heavily|a lot|that won'?t stop)"
+      - "vomiting blood"
+      - "(coughing|coughed) up (a lot of )?blood"
+      - "wymiotuje krwia"
+      - "krwotok"
+
+  - id: thunderclap_headache
+    label: Sudden severe headache
+    patterns:
+      - "worst headache"
+      - "sudden (severe|very bad|explosive) headache"
+      - "najgorszy bol glowy"
+
+  - id: self_harm
+    label: Thoughts of self-harm
+    patterns:
+      - "kill myself"
+      - "end (my|it all)"
+      - "suicid"
+      - "don'?t want to (live|be alive)"
+      - "nie chce zyc"
+      - "zabic sie"
+      - "samobój|samoboj"
+
+# Structured triggers: combine a scale answer with something the patient said earlier.
+structured:
+  - id: severe_pain_chest
+    label: Pain 9-10/10 together with chest location
+    slot_type: scale
+    min_value: 9
+    requires_transcript_pattern: "chest|klat"
+
+# Contextual triggers for tapped answers: matched against "<question> || <answer>", so a chip like
+# "Yes, even when resting" is caught when it answers a breathing question.
+contextual:
+  - id: breathless_at_rest
+    label: Breathlessness at rest
+    pattern: "(breath|tchu|oddech|duszn).*\\|\\|.*(even when resting|at rest|nawet w spoczynku|w spoczynku)"
+  - id: chest_pain_confirmed
+    label: Chest pain confirmed
+    pattern: "(chest|klat).*\\|\\|\\s*(yes|tak)\\b"

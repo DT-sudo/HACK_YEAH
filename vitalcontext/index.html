@@ -1,0 +1,840 @@
+<title>VitalContext</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,500;0,700;1,400&family=Atkinson+Hyperlegible+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one top bar with a surface switch; patient app in a phone frame, doctor dashboard as a dense two-pane desk.
+   Signature: two "inks" for provenance — clinic records are cobalt with a square mark, patient-reported data is amber with a ring mark. */
+:root{
+  --bg:#EDF1F0;          /* cool clinical paper */
+  --surface:#FFFFFF;
+  --sunk:#F5F7F6;
+  --ink:#162B29;         /* deep green-black */
+  --muted:#556966;
+  --line:#D2DBD9;
+  --clinic:#2251A3;      /* cobalt: data from this clinic */
+  --clinic-tint:#E7EEF9;
+  --patient:#94600C;     /* amber: patient-reported */
+  --patient-tint:#FAF0DC;
+  --alert:#B3261E;
+  --alert-tint:#FCEBE9;
+  --ok:#2C7652;
+  --ok-tint:#E4F2EA;
+  --focus:#2251A3;
+  --shadow:0 1px 2px rgba(22,43,41,.06),0 8px 24px rgba(22,43,41,.08);
+  --font:"Atkinson Hyperlegible Next","Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Atkinson Hyperlegible Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --r-s:6px; --r-m:10px; --r-l:22px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1A19; --surface:#16231F; --sunk:#1B2A27; --ink:#E4ECEA; --muted:#9AB0AC; --line:#2C3D3A;
+  --clinic:#8EB1F2; --clinic-tint:#1C2B45; --patient:#E5B562; --patient-tint:#352A16;
+  --alert:#F28B82; --alert-tint:#3D1F1C; --ok:#7FCBA2; --ok-tint:#183126; --focus:#8EB1F2;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1A19; --surface:#16231F; --sunk:#1B2A27; --ink:#E4ECEA; --muted:#9AB0AC; --line:#2C3D3A;
+  --clinic:#8EB1F2; --clinic-tint:#1C2B45; --patient:#E5B562; --patient-tint:#352A16;
+  --alert:#F28B82; --alert-tint:#3D1F1C; --ok:#7FCBA2; --ok-tint:#183126; --focus:#8EB1F2;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;margin:0}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.2}
+.num{font-variant-numeric:tabular-nums}
+
+/* Top bar */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.01em}
+.brand svg{flex:none}
+.switch{display:flex;background:var(--sunk);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.switch button{border:0;background:transparent;padding:6px 14px;border-radius:999px;cursor:pointer;font-weight:500;color:var(--muted)}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.topbar .spacer{flex:1}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:var(--r-s);padding:6px 12px;cursor:pointer;color:var(--muted)}
+.ghost:hover{color:var(--ink);border-color:var(--muted)}
+.demo-note{font-size:13px;color:var(--muted)}
+
+main{padding:24px 16px 48px}
+
+/* ---------- Patient app ---------- */
+.patient-wrap{display:flex;justify-content:center;gap:40px;align-items:flex-start;flex-wrap:wrap}
+.phone{width:390px;max-width:100%;height:780px;max-height:calc(100vh - 120px);min-height:560px;background:var(--surface);
+  border:1px solid var(--line);border-radius:36px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.p-head{padding:18px 20px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.p-head .clinic{font-size:13px;color:var(--muted)}
+.p-head strong{display:block;font-size:15px}
+.p-progress{height:3px;background:var(--sunk)}
+.p-progress span{display:block;height:100%;background:var(--clinic);transition:width .3s ease}
+.p-body{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.p-body > *{flex-shrink:0}
+.p-foot{padding:14px 20px 18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.p-title{font-size:24px;font-weight:700;letter-spacing:-.015em}
+.lead{font-size:16px;color:var(--ink)}
+.small{font-size:13px;color:var(--muted)}
+.appt{background:var(--clinic-tint);border-radius:var(--r-m);padding:14px 16px;display:grid;gap:2px}
+.appt b{font-size:17px}
+.ai-note{border:1px solid var(--line);border-radius:var(--r-m);padding:14px 16px;display:flex;gap:12px}
+.ai-note svg{flex:none;margin-top:2px;color:var(--clinic)}
+.honesty{display:flex;gap:10px;font-size:13.5px;background:var(--patient-tint);border-radius:var(--r-m);padding:12px 14px;line-height:1.45}
+.honesty svg{color:var(--patient)}
+
+.avatar,.avatar-btn{width:40px;height:40px;border-radius:50%;background:var(--patient-tint);color:var(--patient);display:grid;place-items:center;font-weight:700;font-size:14px;flex:none;border:2px solid var(--patient)}
+.avatar{width:52px;height:52px;font-size:17px}
+.avatar-btn{cursor:pointer}
+.avatar-btn:hover{background:var(--patient);color:var(--surface)}
+.prof-id{display:flex;gap:14px;align-items:center}
+.pitem{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:12px 14px;border-top:1px solid var(--line)}
+.plist .pitem:first-child{border-top:0}
+.pitem.editing{background:var(--sunk)}
+.pitem input{border:1px solid var(--line);border-radius:var(--r-s);padding:9px 10px;background:var(--surface);width:100%}
+.pitem .meta{margin-top:2px}
+.opt{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:4px}
+.wear{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--clinic);margin-top:4px}
+.wipe{display:grid;gap:8px;border:1px solid var(--alert);border-radius:var(--r-m);padding:14px;background:var(--alert-tint)}
+.tile{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-m);padding:16px;cursor:pointer;color:var(--ink)}
+.tile:hover{border-color:var(--clinic)}
+.tile.primary{background:var(--clinic);border-color:var(--clinic);color:var(--surface)}
+.tile.primary:hover{filter:brightness(1.07)}
+.tile-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--clinic-tint);color:var(--clinic);flex:none}
+.tile.primary .tile-ic{background:rgba(255,255,255,.16);color:var(--surface)}
+.tile-tx{flex:1;min-width:0;display:grid;gap:2px}
+.tile-tx b{font-size:16px}
+.tile-tx span{font-size:13px;opacity:.8}
+.ptabs{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--line);background:var(--surface)}
+.ptabs button{border:0;background:transparent;padding:9px 0 12px;display:grid;justify-items:center;gap:2px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:500}
+.ptabs button[aria-current="true"]{color:var(--clinic)}
+.ptabs button[aria-current="true"] svg{stroke-width:2.4}
+
+.disclose{border:1px solid var(--line);border-radius:var(--r-m);padding:12px 14px;display:grid;gap:8px;font-size:13.5px;line-height:1.45}
+.disclose-row{display:flex;gap:10px}
+.disclose-row svg{flex:none;color:var(--clinic);margin-top:1px}
+.honest summary{cursor:pointer;color:var(--patient);font-weight:700;font-size:13px}
+.honest p{margin:6px 0 0;color:var(--muted)}
+.vtag{display:flex;align-items:center;gap:4px;font-size:11px;opacity:.8;margin-bottom:2px}
+.vtag svg{width:13px;height:13px}
+.composer .micbtn{background:var(--clinic-tint);color:var(--clinic);border:1px solid var(--clinic)}
+.composer .micbtn:hover{background:var(--clinic);color:var(--surface)}
+.composer button:disabled,.composer input:disabled{opacity:.5;cursor:not-allowed}
+.listening{display:flex;align-items:center;gap:14px;background:var(--clinic-tint);border-radius:var(--r-m);padding:10px 12px}
+.bars{display:flex;gap:3px;align-items:center;height:32px}
+.bars i{display:block;width:4px;border-radius:2px;background:var(--clinic);height:30%;animation:wave 1s ease-in-out infinite}
+.bars i:nth-child(2n){animation-delay:.15s}.bars i:nth-child(3n){animation-delay:.3s}.bars i:nth-child(4n){animation-delay:.45s}
+@keyframes wave{0%,100%{height:25%}50%{height:100%}}
+.btn.stop{font-size:14px;padding:8px 14px}
+.apptcard{border:1px solid var(--line);border-radius:var(--r-m);padding:16px;display:grid;gap:10px;box-shadow:inset 4px 0 0 var(--clinic)}
+.when-big{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.prep{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.ptabs button span{font-size:11.5px;text-align:center;line-height:1.2}
+.btn{border:0;border-radius:var(--r-m);padding:13px 18px;font-weight:700;cursor:pointer;background:var(--clinic);color:var(--surface);font-size:16px}
+.btn:hover{filter:brightness(1.07)}
+.btn.secondary{background:transparent;color:var(--clinic);border:1px solid var(--line)}
+.btn.danger{background:var(--alert);color:var(--surface)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer}
+.check input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--clinic);flex:none}
+
+.group-title{font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.plist{display:grid;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+.plist > div{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:11px 14px;border-top:1px solid var(--line)}
+.plist > div:first-child{border-top:0}
+.plist .k{color:var(--muted);font-size:13px}
+.plist .v{font-weight:500}
+.plist .meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.linkbtn{border:0;background:none;color:var(--clinic);cursor:pointer;padding:0;font-weight:500;font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linkbtn.danger{color:var(--alert)}
+.addform{display:grid;gap:8px;border:1px dashed var(--line);border-radius:var(--r-m);padding:12px}
+.addform input{border:1px solid var(--line);border-radius:var(--r-s);padding:9px 10px;background:var(--surface);width:100%}
+.addform .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* Chat */
+.msgs{display:flex;flex-direction:column;gap:10px}
+.msg{max-width:86%;padding:10px 14px;border-radius:18px;font-size:15px}
+.msg.ai{background:var(--sunk);border-bottom-left-radius:6px;align-self:flex-start}
+.msg.me{background:var(--clinic);color:var(--surface);border-bottom-right-radius:6px;align-self:flex-end}
+.msg.typing{color:var(--muted)}
+.ai-tag{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;align-self:flex-start}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--clinic);color:var(--clinic);background:transparent;border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:500;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--clinic);color:var(--surface)}
+.chip:hover{background:var(--clinic-tint)}
+.chip[aria-pressed="true"]:hover{background:var(--clinic)}
+.scale{display:grid;grid-template-columns:repeat(11,1fr);gap:4px}
+.scale button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-s);padding:9px 0;cursor:pointer;font-variant-numeric:tabular-nums;font-weight:500}
+.scale button:hover{border-color:var(--clinic);color:var(--clinic)}
+.scale-labels{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.composer{display:flex;gap:8px}
+.composer input{flex:1;min-width:0;border:1px solid var(--line);border-radius:999px;padding:10px 16px;background:var(--surface)}
+.composer button{border:0;border-radius:999px;width:44px;height:44px;background:var(--clinic);color:var(--surface);cursor:pointer;display:grid;place-items:center;flex:none}
+
+/* Summary */
+.sumcard{background:var(--sunk);border-radius:var(--r-m);padding:16px;display:grid;gap:8px}
+.sumcard p{margin:0}
+.ul{margin:0;padding-left:20px;display:grid;gap:4px}
+textarea{border:1px solid var(--line);border-radius:var(--r-s);padding:10px;background:var(--surface);width:100%;min-height:80px;resize:vertical}
+
+/* Emergency */
+.calm{background:var(--sunk);border-radius:var(--r-l);padding:20px;display:grid;gap:12px;justify-items:start}
+.calm-icon{width:48px;height:48px;border-radius:50%;background:var(--clinic-tint);color:var(--clinic);display:grid;place-items:center}
+.calm h2{font-size:22px}
+.btn.call{background:var(--alert);color:var(--surface);text-decoration:none;text-align:center;justify-self:stretch;font-size:18px;padding:15px}
+.steps{gap:6px}
+.emergency{background:var(--alert-tint);border:2px solid var(--alert);border-radius:var(--r-m);padding:18px;display:grid;gap:10px}
+.emergency h2{color:var(--alert);font-size:22px}
+.big112{font-size:64px;font-weight:700;color:var(--alert);line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+
+.side-notes{max-width:340px;display:grid;gap:14px;padding-top:12px}
+.side-notes h3{font-size:16px}
+.side-notes p{margin:0;color:var(--muted);font-size:14px}
+.side-notes ol{margin:0;padding-left:20px;color:var(--muted);font-size:14px;display:grid;gap:6px}
+
+/* ---------- Doctor dashboard ---------- */
+.desk{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;max-width:1280px;margin:0 auto;align-items:start}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;position:sticky;top:76px}
+.day-head{padding:14px 16px;border-bottom:1px solid var(--line)}
+.day-head h2{font-size:16px}
+.appts{list-style:none;margin:0;padding:0}
+.appts li button{width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:transparent;cursor:pointer;padding:12px 16px;display:grid;grid-template-columns:48px 1fr;gap:4px 10px;align-items:baseline}
+.appts li:first-child button{border-top:0}
+.appts li button:hover{background:var(--sunk)}
+.appts li button[aria-current="true"]{background:var(--clinic-tint);box-shadow:inset 3px 0 0 var(--clinic)}
+.appts li button.urgent{box-shadow:inset 3px 0 0 var(--alert)}
+.appts li button.urgent[aria-current="true"]{background:var(--alert-tint)}
+.appts .t{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}
+.appts .n{font-weight:700}
+.appts .s{grid-column:2}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pill.ready{background:var(--ok-tint);color:var(--ok)}
+.pill.progress{background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.pill.none{color:var(--muted);border:1px dashed var(--line)}
+.pill.urgent{background:var(--alert);color:var(--surface)}
+.pill.reviewed{background:var(--clinic-tint);color:var(--clinic)}
+.pill.new{background:var(--clinic);color:var(--surface)}
+
+.brief{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);min-width:0}
+.brief-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
+.brief-head h1{font-size:22px;letter-spacing:-.015em}
+.brief-head .sub{color:var(--muted);font-size:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions .btn{font-size:14px;padding:8px 14px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted);padding:10px 22px;border-bottom:1px solid var(--line);background:var(--sunk);align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sec{padding:16px 22px;border-top:1px solid var(--line);display:grid;grid-template-columns:180px minmax(0,1fr);gap:8px 20px}
+.sec:first-of-type{border-top:0}
+.sec > h2{font-size:14px;font-weight:700;color:var(--muted);padding-top:2px}
+.sec .body{min-width:0;display:grid;gap:8px}
+.cc{font-size:19px;font-weight:700;line-height:1.35;text-wrap:pretty}
+
+.mark{width:10px;height:10px;flex:none;display:inline-block}
+.mark.clinic{background:var(--clinic);border-radius:2px}
+.mark.patient{border:2px solid var(--patient);border-radius:50%}
+.fact{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:baseline;padding:7px 10px;border-radius:var(--r-s)}
+.fact .mark{transform:translateY(1px)}
+.fact.clinic{background:transparent}
+.fact.patient{background:var(--patient-tint)}
+.fact.mixed{background:linear-gradient(90deg,var(--clinic-tint),var(--patient-tint))}
+.fact .when{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.fact .cites{grid-column:2/4;display:flex;flex-wrap:wrap;gap:6px}
+.stale{color:var(--alert);font-weight:500}
+.cite{border:1px solid currentColor;background:transparent;border-radius:4px;padding:0 6px;font-family:var(--mono);font-size:11.5px;line-height:1.7;cursor:pointer;white-space:nowrap}
+.cite.clinic{color:var(--clinic)}
+.cite.patient{color:var(--patient)}
+.cite:hover{background:var(--surface)}
+.qa{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:4px 16px;font-size:14px}
+.qa dt{color:var(--muted)}
+.qa dd{margin:0;font-weight:500}
+.correction{border-left:3px solid var(--patient);padding:6px 12px;background:var(--patient-tint);border-radius:0 var(--r-s) var(--r-s) 0;font-size:14px}
+
+.table-wrap{overflow-x:auto}
+table.meds{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+table.meds th{text-align:left;font-weight:500;color:var(--muted);font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.meds td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.meds tr.patient td{background:var(--patient-tint)}
+table.meds tr.past td{color:var(--muted)}
+table.meds .grp td{background:transparent;font-weight:700;font-size:13px;color:var(--ink);padding-top:12px;border-bottom:0}
+.src{display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
+.brief-foot{padding:14px 22px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);display:flex;gap:10px;align-items:flex-start}
+
+.urgent-card{padding:28px 22px;display:grid;gap:12px;max-width:640px}
+.urgent-card h2{color:var(--alert);font-size:22px}
+.empty{padding:40px 22px;display:grid;gap:8px;max-width:520px}
+.empty h2{font-size:18px}
+.empty p{margin:0;color:var(--muted)}
+
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,20,19,.35);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--surface);z-index:41;border-left:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:var(--shadow);animation:slide .22s ease-out;padding-top:env(safe-area-inset-top,0px)}
+@keyframes slide{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+.drawer-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.drawer-head h2{font-size:18px}
+.drawer-body{padding:16px 20px;overflow-y:auto;display:grid;gap:14px;align-content:start}
+.verified{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ok);background:var(--ok-tint);padding:8px 12px;border-radius:var(--r-s)}
+.kv{display:grid;grid-template-columns:130px minmax(0,1fr);gap:6px 14px;font-size:14px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+pre{background:var(--sunk);border:1px solid var(--line);border-radius:var(--r-s);padding:12px;font-family:var(--mono);font-size:12px;overflow-x:auto;margin:8px 0 0;line-height:1.5}
+.x{border:0;background:none;cursor:pointer;color:var(--muted);padding:4px;border-radius:6px}
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:var(--r-m);z-index:60;font-size:14px}
+
+@media (max-width:900px){
+  .desk{grid-template-columns:1fr}
+  .day{position:static}
+  .sec{grid-template-columns:1fr}
+  .side-notes{display:none}
+}
+@media (max-width:480px){
+  main{padding:12px 16px 32px}
+  .phone{border-radius:20px;height:calc(100dvh - 200px);min-height:520px}
+  .qa{grid-template-columns:1fr}
+  .qa dd{margin-bottom:6px}
+  .demo-note{display:none}
+  .brief-head,.legend,.sec,.brief-foot{padding-left:14px;padding-right:14px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="topbar">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="1" y="1" width="11" height="11" rx="2" fill="var(--clinic)"/><circle cx="19" cy="19" r="5.2" fill="none" stroke="var(--patient)" stroke-width="2.6"/><path d="M12 6.5h4.5a3 3 0 0 1 3 3V13" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round"/></svg>
+    VitalContext
+  </div>
+  <div class="switch" role="group" aria-label="Choose surface">
+    <button id="tab-patient" data-action="view" data-v="patient">Patient app</button>
+    <button id="tab-doctor" data-action="view" data-v="doctor">Doctor dashboard</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="demo-note">Prototype · synthetic patients only</span>
+  <button class="ghost" id="reset" data-action="reset">Reset demo</button>
+</header>
+<main id="app"></main>
+<div id="overlay"></div>
+
+<script>
+/* ================= Demo data (synthetic, FHIR-shaped) ================= */
+const TODAY = new Date('2026-10-05T08:00:00');
+const CLINIC = 'Przychodnia Rodzinna Kazimierz';
+const DOCTOR = 'Dr. Ewa Wiśniewska';
+
+const fmt = d => new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+const monthsAgo = d => { const a=new Date(d); return (TODAY.getFullYear()-a.getFullYear())*12 + (TODAY.getMonth()-a.getMonth()) - (TODAY.getDate()<a.getDate()?1:0); };
+const isStale = d => monthsAgo(d) >= 6;
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const R = {}; // record store keyed by "Type/id"
+function rec(type,id,source,title,date,fields,raw){ R[`${type}/${id}`]={type,id,source,title,date,fields,raw:Object.assign({resourceType:type,id},raw)}; }
+
+/* --- Anna Kowalska --- */
+rec('MedicationRequest','mr-4471','clinic','Lisinopril 10 mg tablet','2026-08-14',
+  [['Dosage','10 mg once daily, morning'],['Status','active'],['Prescriber',DOCTOR],['Reason','Condition/c-221 · Essential hypertension'],['Product info','Lists dry cough among common adverse reactions']],
+  {status:'active',intent:'order',medicationCodeableConcept:{coding:[{system:'http://www.whocc.no/atc',code:'C09AA03',display:'lisinopril'}]},subject:{reference:'Patient/anna-k'},authoredOn:'2026-08-14',dosageInstruction:[{text:'10 mg once daily'}],reasonReference:[{reference:'Condition/c-221'}]});
+rec('MedicationRequest','mr-3920','clinic','Atorvastatin 20 mg tablet','2023-03-02',
+  [['Dosage','20 mg once daily, evening'],['Status','active'],['Reason','Condition/c-160 · Hypercholesterolaemia']],
+  {status:'active',intent:'order',medicationCodeableConcept:{coding:[{code:'C10AA05',display:'atorvastatin'}]},authoredOn:'2023-03-02',dosageInstruction:[{text:'20 mg once daily'}]});
+rec('MedicationRequest','mr-4102','clinic','Amoxicillin 500 mg capsule','2026-01-10',
+  [['Dosage','500 mg three times daily, 7 days'],['Status','completed 17 Jan 2026'],['Reason','Acute sinusitis']],
+  {status:'completed',intent:'order',medicationCodeableConcept:{coding:[{code:'J01CA04',display:'amoxicillin'}]},authoredOn:'2026-01-10',dispenseRequest:{validityPeriod:{start:'2026-01-10',end:'2026-01-17'}}});
+rec('MedicationStatement','ms-a01','patient','Ibuprofen 400 mg (over the counter)','2026-09-20',
+  [['Dosage','400 mg as needed, about twice a week'],['Started','2025'],['Prescriber','None, bought at a pharmacy'],['Reported by','Patient, profile entry']],
+  {status:'active',medicationCodeableConcept:{text:'Ibuprofen 400 mg'},informationSource:{reference:'Patient/anna-k'},dateAsserted:'2026-09-20',dosage:[{text:'400 mg PRN, ~2×/week'}]});
+rec('MedicationStatement','ms-a02','patient','Vitamin D3 2000 IU (supplement)','2026-09-20',
+  [['Dosage','2000 IU once daily'],['Started','1 Oct 2025'],['Reported by','Patient, profile entry']],
+  {status:'active',medicationCodeableConcept:{text:'Cholecalciferol 2000 IU'},informationSource:{reference:'Patient/anna-k'},effectivePeriod:{start:'2025-10-01'},dateAsserted:'2026-09-20'});
+rec('MedicationStatement','ms-a03','patient','Omeprazole 20 mg','2026-09-20',
+  [['Dosage','20 mg once daily'],['Started','12 Jun 2026'],['Prescriber','Another provider (private practice, Kraków)'],['Reason','Not given'],['Reported by','Patient, profile entry']],
+  {status:'active',medicationCodeableConcept:{text:'Omeprazole 20 mg'},informationSource:{reference:'Patient/anna-k'},effectivePeriod:{start:'2026-06-12'},dateAsserted:'2026-09-20',note:[{text:'Prescribed outside this clinic'}]});
+rec('Condition','c-221','clinic','Essential hypertension','2026-08-14',
+  [['Clinical status','active'],['Onset','14 Aug 2026'],['Recorded by',DOCTOR]],
+  {clinicalStatus:{coding:[{code:'active'}]},code:{coding:[{system:'http://hl7.org/fhir/sid/icd-10',code:'I10',display:'Essential (primary) hypertension'}]},onsetDateTime:'2026-08-14'});
+rec('Encounter','enc-1874','clinic','GP visit: cough after respiratory infection','2025-02-03',
+  [['Date','3 Feb 2025'],['Reason','Cough following upper respiratory infection'],['Outcome','Resolved within 10 days (phone follow-up 14 Feb 2025)']],
+  {status:'finished',class:{code:'AMB'},period:{start:'2025-02-03'},reasonCode:[{text:'Cough after URTI'}]});
+rec('DocumentReference','doc-552','clinic','Chest X-ray report','2025-02-05',
+  [['Date','5 Feb 2025'],['Finding','No focal consolidation. Heart size normal.'],['Author','Radiology, partner lab']],
+  {status:'current',type:{text:'Chest X-ray report'},date:'2025-02-05',description:'No focal consolidation. Heart size normal.'});
+rec('AllergyIntolerance','al-090','clinic','House dust mite allergy','2019-05-11',
+  [['Criticality','low'],['Reaction','Rhinitis, mild'],['Recorded','11 May 2019']],
+  {clinicalStatus:{coding:[{code:'active'}]},code:{text:'House dust mite'},criticality:'low',recordedDate:'2019-05-11'});
+rec('Observation','obs-a-smk','patient','Tobacco use','2026-04-02',
+  [['Status','Former smoker'],['Pack-years','12'],['Quit','2019'],['Vaping','No'],['Category','social-history']],
+  {status:'final',category:[{coding:[{code:'social-history'}]}],code:{coding:[{system:'http://loinc.org',code:'72166-2',display:'Tobacco smoking status'}]},valueCodeableConcept:{text:'Former smoker'},effectiveDateTime:'2026-04-02'});
+rec('Observation','obs-a-occ','patient','Occupation and workload','2025-11-10',
+  [['Occupation','Accountant'],['Work type','Sedentary, office'],['Shift work','No'],['Stress level','Moderate'],['Category','social-history']],
+  {status:'final',category:[{coding:[{code:'social-history'}]}],code:{text:'Occupation'},valueString:'Accountant, sedentary office work',effectiveDateTime:'2025-11-10'});
+rec('Observation','obs-a-act','patient','Wearable weekly summary','2026-10-01',
+  [['Steps','5,800 per day (7-day average)'],['Resting heart rate','68 bpm'],['Sleep','6 h 40 min average'],['Source','Patient-connected wearable']],
+  {status:'final',category:[{coding:[{code:'activity'}]}],code:{text:'Weekly activity summary'},effectiveDateTime:'2026-10-01',component:[{code:{text:'steps/day'},valueQuantity:{value:5800}},{code:{text:'resting HR'},valueQuantity:{value:68,unit:'bpm'}}]});
+rec('QuestionnaireResponse','qr-a-1005','patient','Pre-visit intake chat','2026-10-04',
+  [['Completed','4 Oct 2026'],['Mode','AI-guided chat, text'],['Confirmed by patient','Yes']],
+  {status:'completed',questionnaire:'Questionnaire/vc-intake-v1',subject:{reference:'Patient/anna-k'},authored:'2026-10-04'});
+
+/* --- Piotr Nowak --- */
+rec('Observation','obs-p-run','patient','Running distance per week (wearable)','2026-10-02',
+  [['24 Aug','14 km'],['31 Aug','19 km'],['7 Sep','24 km'],['14 Sep','29 km'],['21 Sep','33 km'],['28 Sep','38 km'],['Source','Patient-connected wearable']],
+  {status:'final',category:[{coding:[{code:'activity'}]}],code:{text:'Running distance, weekly'},effectivePeriod:{start:'2026-08-24',end:'2026-10-02'}});
+rec('MedicationStatement','ms-p01','patient','Ibuprofen 400 mg (over the counter)','2026-10-03',
+  [['Dosage','400 mg three times daily'],['Duration','About 10 days'],['Reported by','Patient, profile entry']],
+  {status:'active',medicationCodeableConcept:{text:'Ibuprofen 400 mg'},informationSource:{reference:'Patient/piotr-n'},dosage:[{text:'400 mg TID'}],dateAsserted:'2026-10-03'});
+rec('MedicationStatement','ms-p02','patient','Creatine monohydrate (supplement)','2026-10-03',
+  [['Dosage','5 g once daily'],['Started','Jul 2026'],['Reported by','Patient, profile entry']],
+  {status:'active',medicationCodeableConcept:{text:'Creatine monohydrate 5 g'},informationSource:{reference:'Patient/piotr-n'},dateAsserted:'2026-10-03'});
+rec('Encounter','enc-2210','clinic','GP visit: right ankle sprain','2024-06-18',
+  [['Date','18 Jun 2024'],['Reason','Right ankle sprain, grade I, during running'],['Plan recorded','Physiotherapy referral']],
+  {status:'finished',period:{start:'2024-06-18'},reasonCode:[{text:'Sprain of right ankle'}]});
+rec('Observation','obs-p-lab','clinic','Basic metabolic panel','2025-09-12',
+  [['Creatinine','0.98 mg/dL (ref. 0.70–1.20)'],['eGFR','>90 mL/min/1.73m²'],['Date','12 Sep 2025']],
+  {status:'final',category:[{coding:[{code:'laboratory'}]}],code:{coding:[{system:'http://loinc.org',code:'2160-0',display:'Creatinine'}]},valueQuantity:{value:0.98,unit:'mg/dL'},effectiveDateTime:'2025-09-12'});
+rec('Observation','obs-p-occ','patient','Occupation and workload','2026-03-01',
+  [['Occupation','Warehouse team lead'],['Work type','Physical, on feet most of shift'],['Shift work','Yes, rotating'],['Category','social-history']],
+  {status:'final',category:[{coding:[{code:'social-history'}]}],code:{text:'Occupation'},effectiveDateTime:'2026-03-01'});
+rec('QuestionnaireResponse','qr-p-1005','patient','Pre-visit intake chat','2026-10-04',
+  [['Completed','4 Oct 2026'],['Mode','AI-guided chat, voice'],['Confirmed by patient','Yes']],
+  {status:'completed',questionnaire:'Questionnaire/vc-intake-v1',subject:{reference:'Patient/piotr-n'},authored:'2026-10-04'});
+
+/* --- Intake script (Anna). Neutral, plain-language questions; the internal working list is never shown. --- */
+const QUESTIONS = [
+  {id:'complaint',type:'free',text:"Hi Anna. In your own words, what would you like to talk to Dr. Wiśniewska about?",suggest:["I've had a dry cough for a few weeks"],label:'Reason for visit'},
+  {id:'onset',type:'single',text:"When did it start?",options:['Less than a week ago','1–2 weeks ago','About 3 weeks ago','More than a month ago'],label:'Onset'},
+  {id:'character',type:'single',text:"Is the cough dry, or do you cough anything up?",options:['Dry','Clear mucus','Yellow or green mucus','Blood'],label:'Character'},
+  {id:'timing',type:'single',text:"Is there a time of day when it's worse?",options:['At night','In the morning','After physical effort','No pattern'],label:'Timing'},
+  {id:'assoc',type:'multi',text:"Have you noticed any of these as well? Choose all that apply.",options:['Fever','Runny or blocked nose','Heartburn','Wheezing','Hoarse voice','None of these'],label:'Other symptoms'},
+  {id:'sob',type:'single',text:"Do you get out of breath?",options:['No','Only on stairs or when hurrying','Yes, even when resting'],redflag:['Yes, even when resting'],label:'Breathlessness'},
+  {id:'changes',type:'single',text:"In the two months before it started, did anything change? For example new medicines, a cold, or a new place.",options:['Started a new medicine','Had a cold','Moved home or changed job','Nothing I can think of'],label:'Recent changes'},
+  {id:'severity',type:'scale',text:"How much is it bothering you day to day, from 0 (not at all) to 10 (the worst)?",label:'Impact (0–10)'}
+];
+const ANNA_DEFAULT = {complaint:"I've had a dry cough for a few weeks",onset:'About 3 weeks ago',character:'Dry',timing:'At night',assoc:['Heartburn'],sob:'No',changes:'Started a new medicine',severity:5};
+// Deterministic red-flag rules (not LLM). Applied to every typed message and flagged options.
+const REDFLAG_RX = /(chest pain|pain in (my )?chest|can'?t breathe|cannot breathe|difficulty breathing|struggling to breathe|choking|fainted|passed out|lips (are )?blue|ból w klatce|duszno|nie mogę oddychać|zemdlał)/i;
+
+/* ================= State ================= */
+const fresh = () => ({
+  view:'patient', step:'chat', ack:true,
+  msgs:[{from:'ai',text:QUESTIONS[0].text}], qi:0, draft:'', voice:null, lastVoice:false, answers:{}, multi:[], typing:false,
+  correction:'', correcting:false, truthful:false,
+  extMeds:['ms-a01','ms-a02','ms-a03'], adding:false, ptab:'home', life:JSON.parse(JSON.stringify(LIFE0)), editing:null, wiping:false,
+  completed:false, urgent:false, urgentText:'',
+  selected:'anna', reviewed:{}, drawer:null, toast:null
+});
+let S;
+
+/* ================= Helpers ================= */
+const icon = {
+  ai:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9.5 16h5"/></svg>',
+  send:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  x:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  check:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>',
+  info:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:2px"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>'
+};
+icon.mic = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+const mark = src => `<span class="mark ${src}" aria-hidden="true"></span>`;
+const srcLabel = src => src==='clinic' ? 'Clinic record' : 'Patient-reported';
+const cite = id => { const r=R[id]; return `<button class="cite ${r.source}" data-action="open" data-id="${id}" title="Open ${esc(r.title)}" aria-label="Source: ${srcLabel(r.source)}, ${id}">${id.split('/')[1]}</button>`; };
+function fact(text, ids, opts={}){
+  const srcs = [...new Set(ids.map(i=>R[i].source))];
+  const cls = srcs.length>1 ? 'mixed' : srcs[0];
+  const m = srcs.length>1 ? `<span style="display:inline-flex;gap:3px">${mark('clinic')}${mark('patient')}</span>` : mark(srcs[0]);
+  const when = opts.when ? `<span class="when">${opts.when}</span>` : '';
+  return `<div class="fact ${cls}">${m}<div>${text}</div>${when}<div class="cites">${ids.map(cite).join('')}</div></div>`;
+}
+const answers = () => S.completed ? S.answers : ANNA_DEFAULT;
+const lc = s => s.charAt(0).toLowerCase()+s.slice(1);
+
+/* ================= Patient app ================= */
+const LIFE0 = {
+  smk:{label:'Smoking',id:'obs-a-smk',v:'Former smoker, 12 pack-years, quit 2019. No vaping.',d:'2026-04-02',hint:'e.g. never smoked, or quit in 2019'},
+  alc:{label:'Alcohol',id:'obs-a-alc',v:'A glass of wine at weekends, about 2 units a week',d:'2026-04-02',hint:'How often, and roughly how much'},
+  act:{label:'Physical activity',id:'obs-a-act',v:'Walks to work and back, about 5,800 steps a day',d:'2026-10-01',wearable:'Resting heart rate 68 bpm · sleep 6 h 40 min',hint:'Type, how often, how hard'},
+  slp:{label:'Sleep',id:'obs-a-slp',v:'About 6 h 40 min, regular bedtime',d:'2026-04-02',hint:'How long, how regular'},
+  diet:{label:'Diet',id:'obs-a-diet',v:'Mixed diet, trying to eat less salt',d:'2026-04-02',hint:'Pattern or restrictions'},
+  occ:{label:'Work',id:'obs-a-occ',v:'Accountant, mostly sitting, no shifts, moderate stress',d:'2025-11-10',hint:'Sitting or physical, shifts, stress'},
+  sub:{label:'Other substances',id:'obs-a-sub',v:'',d:'2026-04-02',optional:true,hint:'Optional'}
+};
+const PATIENT_TODAY = '2026-10-04';
+const lifeMeta = {'Observation/obs-a-alc':'Alcohol use','Observation/obs-a-slp':'Sleep','Observation/obs-a-diet':'Diet','Observation/obs-a-sub':'Other substances'};
+Object.entries(lifeMeta).forEach(([k,t])=>{ const key=Object.keys(LIFE0).find(x=>'Observation/'+LIFE0[x].id===k); const l=LIFE0[key];
+  rec('Observation',l.id,'patient',t,l.d,[['Patient entry',l.v||'Not provided'],['Category','social-history'],['Reported by','Patient, profile entry']],{status:'final',category:[{coding:[{code:'social-history'}]}],code:{text:t},valueString:l.v,effectiveDateTime:l.d}); });
+const R0 = JSON.parse(JSON.stringify(R));
+
+const pIcon = {
+  home:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
+  user:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+  chat:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+  chev:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+  mic:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  cal:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  watch:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3"/></svg>'
+};
+function profileUpdated(){ const ds=[...Object.values(S.life).map(l=>l.d),...S.extMeds.map(m=>R['MedicationStatement/'+m].date)]; return ds.sort().pop(); }
+
+function syncLife(k){ const l=S.life[k], r=R['Observation/'+l.id]; r.date=l.d; r.fields=[['Patient entry',l.v||'Deleted by patient'],['Category','social-history'],['Reported by','Patient, profile entry']]; r.raw.valueString=l.v; r.raw.effectiveDateTime=l.d; }
+function apptsView(){
+  const st = S.urgent?['urgent','Urgent: please call 112']:S.completed?['ready','Answers sent']:S.qi>0?['progress','In progress']:['none','Not started'];
+  const past = [['14 Aug 2026','Blood pressure check'],['10 Jan 2026','Sinus infection'],['3 Feb 2025','Cough after a cold']];
+  return `<div class="group-title">Upcoming</div>
+    <div class="apptcard">
+      <div class="when-big num">Mon 5 Oct · 10:20</div>
+      <div><b>${DOCTOR}</b><div class="small">Family doctor · in person</div></div>
+      <div class="small">${CLINIC}<br>ul. Józefa 14, Kraków</div>
+      <div class="prep"><span class="small">Visit preparation</span><span class="pill ${st[0]}">${st[1]}</span></div>
+      ${S.completed||S.urgent?'':`<button class="btn" data-action="ptab" data-v="home" style="font-size:15px;padding:11px 16px">${S.qi>0?'Continue in chat':'Start in chat'}</button>`}
+    </div>
+    <div class="group-title">Past visits</div>
+    <div class="plist">${past.map(([d,r])=>`<div class="pitem"><div><div class="v">${r}</div><div class="k num">${d} · ${DOCTOR}</div></div></div>`).join('')}</div>
+    <p class="small" style="margin:0">Need another appointment? Call the clinic on <b class="num">+48 12 000 00 00</b>.</p>`;
+}
+function profileView(){
+  const items = Object.entries(S.life).map(([k,l])=>{
+    if(S.editing===k) return `<div class="pitem editing"><form data-form="life" data-k="${k}" style="display:grid;gap:8px;width:100%">
+        <label class="k" for="life-${k}">${l.label}</label>
+        <input id="life-${k}" value="${esc(l.v)}" placeholder="${esc(l.hint)}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="submit" style="font-size:14px;padding:8px 14px">Save</button><button class="btn secondary" type="button" data-action="editlife" data-k="" style="font-size:14px;padding:8px 14px">Cancel</button>${l.v?`<button class="linkbtn danger" type="button" data-action="clearlife" data-k="${k}" style="margin-left:auto">Delete entry</button>`:''}</div>
+      </form></div>`;
+    return `<div class="pitem"><div style="min-width:0"><div class="k">${l.label}${l.optional?' <span class="opt">optional</span>':''}</div>
+        <div class="v">${l.v?esc(l.v):'<span class="k">Not provided</span>'}</div>
+        ${l.wearable&&l.v?`<div class="wear">${pIcon.watch} Wearable · ${l.wearable}</div>`:''}
+        <div class="meta num">${l.v?'Updated '+fmt(l.d):''}</div></div>
+      <button class="linkbtn" data-action="editlife" data-k="${k}" aria-label="${l.v?'Edit':'Add'} ${l.label}">${l.v?'Edit':'Add'}</button></div>`;
+  }).join('');
+  const meds = S.extMeds.length ? S.extMeds.map(id=>{const r=R['MedicationStatement/'+id];const pres=(r.fields.find(f=>f[0]==='Prescriber')||[])[1];return `<div class="pitem"><div style="min-width:0"><div class="v">${esc(r.title)}</div><div class="k">${esc(r.fields[0][1])}${pres?' · '+esc(pres):''}</div></div><button class="linkbtn danger" data-action="delmed" data-id="${id}" aria-label="Remove ${esc(r.title)}">Remove</button></div>`}).join('') : `<div class="pitem"><span class="k">No medicines listed.</span></div>`;
+  return `<div class="prof-id"><div class="avatar" aria-hidden="true">AK</div><div><h1 class="p-title" style="font-size:21px">Anna Kowalska</h1><div class="small num">Born 14 Mar 1974 · patient at ${CLINIC}</div></div></div>
+    <p class="small" style="margin:0">Dr. Wiśniewska sees your profile with every visit, so the chat won't ask these questions again. Only you can change it.</p>
+    <div class="group-title">Lifestyle</div>
+    <div class="plist">${items}</div>
+    <div class="group-title">Medicines from elsewhere <span class="small">${S.extMeds.length} listed</span></div>
+    <p class="small" style="margin:0">Prescriptions from other doctors, plus anything you buy yourself, like painkillers or supplements. Medicines from this clinic are already on file.</p>
+    <div class="plist">${meds}</div>
+    ${S.adding ? `<form class="addform" data-form="addmed">
+        <label class="small" for="m-name">Medicine name</label><input id="m-name" required placeholder="e.g. Magnesium">
+        <div class="row"><div><label class="small" for="m-dose">Dose</label><input id="m-dose" placeholder="e.g. 250 mg"></div><div><label class="small" for="m-freq">How often</label><input id="m-freq" placeholder="e.g. once a day"></div></div>
+        <div class="row"><div><label class="small" for="m-start">Started</label><input id="m-start" placeholder="e.g. May 2026"></div><div><label class="small" for="m-who">Prescribed by</label><input id="m-who" placeholder="Optional"></div></div>
+        <div style="display:flex;gap:8px"><button class="btn" type="submit" style="font-size:14px;padding:9px 14px">Add medicine</button><button class="btn secondary" type="button" data-action="adding" style="font-size:14px;padding:9px 14px">Cancel</button></div>
+      </form>` : `<button class="btn secondary" data-action="adding" style="font-size:14px;padding:10px 14px">Add a medicine</button>`}
+    <div class="group-title">Your data</div>
+    <p class="small" style="margin:0">Everything here is optional. You can delete it at any time; your clinic's own records aren't affected.</p>
+    ${S.wiping ? `<div class="wipe"><b>Delete your whole profile?</b><span class="small">Your lifestyle answers and medicines from elsewhere will be removed and your doctor won't see them.</span><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn danger" data-action="wipe" style="font-size:14px;padding:8px 14px">Delete profile</button><button class="btn secondary" data-action="wiping" style="font-size:14px;padding:8px 14px">Keep it</button></div></div>`
+      : `<button class="linkbtn danger" data-action="wiping" style="justify-self:start">Delete my profile data</button>`}`;
+}
+
+function patientView(){
+  const steps = {chat:0.05+0.8*(S.qi/QUESTIONS.length),summary:0.9,sent:1,emergency:1};
+  const onVisit = S.ptab==='home';
+  const titles = {home:S.step==='chat'?'AI assistant':'Visit preparation',appts:'My appointments',profile:'My profile'};
+  const head = `<div class="p-head"><div style="flex:1;min-width:0"><span class="clinic">${CLINIC}</span><strong>${titles[S.ptab]}</strong></div>
+      ${S.ptab!=='profile'?`<button class="avatar-btn" data-action="ptab" data-v="profile" aria-label="Open my profile">AK</button>`:''}</div>
+    ${onVisit ? `<div class="p-progress" aria-hidden="true"><span style="width:${(steps[S.step]*100).toFixed(0)}%"></span></div>`:''}`;
+  let body='', foot='';
+  if(S.ptab==='profile'){ body = profileView(); }
+  else if(S.ptab==='appts'){ body = apptsView(); }
+  else if(S.step==='chat'){
+    const q = QUESTIONS[S.qi];
+    const done = S.qi>=QUESTIONS.length;
+    body = `<div class="disclose">
+        <div class="disclose-row">${icon.ai}<div><b>You're chatting with the clinic's AI assistant.</b> It asks questions and passes your answers to ${DOCTOR} before your visit on <span class="num">Mon 5 Oct, 10:20</span>. It doesn't diagnose or give medical advice.</div></div>
+        <details class="honest"><summary>Please answer honestly</summary><p>Your answers help decide how urgently you're seen. Giving false information on purpose to get an earlier appointment is misuse of the service and can lead to consequences under the clinic's rules. Honest mistakes are never penalised. If you're not sure about something, say so.</p><p>Your answers are health data. ${CLINIC} processes them to provide your care (GDPR Art. 9(2)(h)).</p></details>
+      </div>
+      <div class="msgs" aria-live="polite">${S.msgs.map(m=>`<div class="msg ${m.from}">${m.voice?`<span class="vtag">${icon.mic} Voice</span>`:''}${esc(m.text)}</div>`).join('')}${S.typing?'<div class="msg ai typing">Typing…</div>':''}</div>`;
+    if(!S.typing && !done && !S.voice){
+      if(q.type==='single') body += `<div class="chips">${q.options.map(o=>`<button class="chip" data-action="answer" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+      if(q.type==='multi') body += `<div class="chips">${q.options.map(o=>`<button class="chip" aria-pressed="${S.multi.includes(o)}" data-action="toggle" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div><button class="btn secondary" data-action="multidone" ${S.multi.length?'':'disabled'} style="justify-self:start;font-size:14px;padding:9px 16px">Done</button>`;
+      if(q.type==='scale') body += `<div class="scale">${Array.from({length:11},(_,i)=>`<button data-action="answer" data-v="${i}" aria-label="${i} out of 10">${i}</button>`).join('')}</div><div class="scale-labels"><span>Not at all</span><span>The worst</span></div>`;
+    }
+    if(done) foot = `<button class="btn" data-action="go" data-v="summary">Review my summary</button>`;
+    else if(S.voice==='listening') foot = `<div class="listening" role="status"><div class="bars" aria-hidden="true">${'<i></i>'.repeat(9)}</div><div style="flex:1"><b>Listening…</b><div class="small">Speak in Polish or English</div></div><button class="btn danger stop" data-action="stopvoice">Stop</button></div>`;
+    else foot = `<form class="composer" data-form="say">
+        <button type="button" class="micbtn" data-action="mic" aria-label="Answer by speaking" ${S.typing?'disabled':''}>${icon.mic}</button>
+        <input id="say" autocomplete="off" value="${esc(S.draft)}" placeholder="${S.draft?'':q.type==='free'?'Type or speak':'Type, speak or tap above'}" aria-label="Your message" ${S.typing?'disabled':''}>
+        <button type="submit" class="sendbtn" aria-label="Send" ${S.typing?'disabled':''}>${icon.send}</button></form>
+      <span class="small">${S.draft&&S.lastVoice?'Check what we heard, edit if needed, then send.':'Try typing "chest pain" to see the emergency safety net.'}</span>`;
+  }
+  else if(S.step==='summary'){
+    const a = S.answers;
+    const assoc = (a.assoc||[]).filter(x=>x!=='None of these');
+    body = `<h1 class="p-title">Here's what we'll send</h1>
+      <p class="small" style="margin:0">Check it reads right. Dr. Wiśniewska only sees it after you confirm.</p>
+      <div class="sumcard">
+        <p>${esc(a.complaint)}.</p>
+        <p>It started ${lc(a.onset)}. The cough is ${a.character==='Dry'?'dry':'bringing up '+lc(a.character)}${a.timing==='No pattern'?' and has no clear pattern during the day':', and it\'s worse '+lc(a.timing)}.</p>
+        <p>${assoc.length?'You also have: '+assoc.map(lc).join(', ')+'.':'You haven\'t noticed other symptoms.'} ${a.sob==='No'?'You don\'t get out of breath.':'You get out of breath '+lc(a.sob).replace('only ','')+'.'}</p>
+        <p>Before it started: ${lc(a.changes)}. You rated how much it bothers you at <span class="num">${a.severity}</span> out of 10.</p>
+        ${S.correction?`<p><b>Your correction:</b> ${esc(S.correction)}</p>`:''}
+      </div>
+      ${S.correcting?`<label class="small" for="corr">What should we correct?</label><textarea id="corr" placeholder="e.g. It started closer to 4 weeks ago">${esc(S.correction)}</textarea><button class="btn secondary" data-action="savecorr" style="justify-self:start;font-size:14px;padding:9px 16px">Save correction</button>`:''}
+      <div class="group-title">Please bring</div>
+      <ul class="ul"><li>The packaging of every medicine you take, including omeprazole and vitamin D</li><li>Results of any tests done outside this clinic</li></ul>
+      <div class="group-title">Questions you could ask</div>
+      <ul class="ul"><li>What should I keep an eye on while the cough lasts?</li><li>Should I change anything before my next visit?</li><li>Do I need any tests?</li></ul>`;
+    foot = `<label class="check"><input type="checkbox" id="truthful" ${S.truthful?'checked':''}> My answers are true to the best of my knowledge.</label><button class="btn" data-action="confirm" ${S.truthful?'':'disabled'}>Confirm and send to my doctor</button>${S.correcting?'':'<button class="btn secondary" data-action="correct">Something\'s not right</button>'}`;
+  }
+  else if(S.step==='sent'){
+    body = `<div style="display:grid;gap:14px;padding-top:24px"><div style="width:52px;height:52px;border-radius:50%;background:var(--ok-tint);color:var(--ok);display:grid;place-items:center">${icon.check.replace('16','28').replace('16','28')}</div>
+      <h1 class="p-title">Sent to ${DOCTOR}</h1>
+      <p class="lead" style="margin:0">She'll read it before your visit on Monday at 10:20.</p>
+      <p class="small" style="margin:0">If things get worse before then, call the clinic. In an emergency, call 112.</p></div>`;
+    foot = `<button class="btn secondary" data-action="view" data-v="doctor">See what the doctor sees</button>`;
+  }
+  else if(S.step==='emergency'){
+    body = `<div class="calm" role="alert">
+        <div class="calm-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></div>
+        <h2>Let's get you checked now</h2>
+        <p style="margin:0">Thank you for telling us. What you described is best looked at right away, so please don't wait for your appointment.</p>
+        <a class="btn call" href="tel:112">Call 112</a>
+        <p class="small" style="margin:0">The number is <b class="num">112</b>. It's free, and the person who answers will tell you what to do.</p>
+      </div>
+      <div class="group-title">What to do</div>
+      <ol class="ul steps"><li>Call 112 and say what you told us here.</li><li>Stay where you are and keep your phone close.</li><li>If someone is nearby, ask them to stay with you.</li></ol>
+      <p class="small" style="margin:0">Not sure it's serious? Call anyway. They'll help you decide. We've also let ${CLINIC} know, so they can follow up with you.</p>`;
+    foot = `<button class="btn secondary" data-action="view" data-v="doctor">See the clinic's view</button>`;
+  }
+  const notes = `<aside class="side-notes">
+      <h3>What this demo shows</h3>
+      <ol>
+        <li>The app opens straight into the chat. Patients can type, speak or tap an answer. The AI disclosure is pinned at the top (EU AI Act Art. 50).</li>
+        <li>Tabs for Home (the chat), My appointments and Profile. Lifestyle and outside medicines live in Profile and are never re-asked in the chat.</li>
+        <li>Each question is picked to narrow down possible explanations. That working list stays hidden from everyone.</li>
+        <li>A rule-based safety net stops the chat and calmly points the patient to 112 on red flags.</li>
+        <li>The patient confirms the plain-language summary, and that it's truthful, before the doctor sees it.</li>
+      </ol>
+      <p>Profile edits flow into the doctor's brief. Update "Work" and the stale-data flag disappears; remove a medicine and it leaves the medication overview.</p>
+    </aside>`;
+  const tabs = S.step==='emergency' && onVisit ? '' : `<nav class="ptabs" aria-label="Patient app sections">${[['home',pIcon.home,'Home'],['appts',pIcon.cal,'My appointments'],['profile',pIcon.user,'Profile']].map(([k,ic,l])=>`<button data-action="ptab" data-v="${k}" aria-current="${S.ptab===k}">${ic}<span>${l}</span></button>`).join('')}</nav>`;
+  return `<div class="patient-wrap"><section class="phone" aria-label="Patient app">${head}<div class="p-body" id="pbody">${body}</div>${foot?`<div class="p-foot">${foot}</div>`:''}${tabs}</section>${notes}</div>`;
+}
+
+/* ================= Doctor dashboard ================= */
+const DAY = [
+  {id:'marek',t:'08:00',name:'Marek Zieliński',age:61,sex:'M',status:'urgent',urgentText:'Chest pain reported in intake chat at 07:42. Patient was told to call 112 and the chat stopped.'},
+  {id:'halina',t:'08:20',name:'Halina Dąbrowska',age:74,sex:'F',status:'none'},
+  {id:'piotr',t:'09:00',name:'Piotr Nowak',age:34,sex:'M',status:'ready'},
+  {id:'zofia',t:'09:20',name:'Zofia Lewandowska',age:29,sex:'F',status:'progress'},
+  {id:'anna',t:'10:20',name:'Anna Kowalska',age:52,sex:'F',status:'ready'},
+  {id:'tomasz',t:'11:00',name:'Tomasz Wójcik',age:45,sex:'M',status:'none'}
+];
+function statusOf(p){
+  if(p.id==='anna' && S.urgent) return 'urgent';
+  if(S.reviewed[p.id]) return 'reviewed';
+  return p.status;
+}
+function pill(st, p){
+  if(st==='urgent') return '<span class="pill urgent">Urgent · safety net</span>';
+  if(st==='reviewed') return `<span class="pill reviewed">${icon.check} Reviewed</span>`;
+  if(st==='ready') return (p&&p.id==='anna'&&S.completed) ? '<span class="pill new">Brief updated just now</span>' : '<span class="pill ready">Brief ready</span>';
+  if(st==='progress') return '<span class="pill progress">Intake in progress</span>';
+  return '<span class="pill none">Intake not started</span>';
+}
+
+function annaBrief(){
+  const a = answers();
+  const assoc = (a.assoc||[]).filter(x=>x!=='None of these');
+  const QR = 'QuestionnaireResponse/qr-a-1005';
+  const onsetShort = a.onset.replace(' ago','').toLowerCase();
+  const timing = a.timing==='No pattern' ? 'no daily pattern' : 'worse '+lc(a.timing);
+  const cc = `${a.character==='Dry'?'Dry cough':'Cough with '+lc(a.character)}, onset ${onsetShort} ago, ${timing}. Impact ${a.severity}/10.`;
+  const medsCurrent = [
+    {id:'MedicationRequest/mr-4471',name:'Lisinopril',dose:'10 mg once daily',dates:'since 14 Aug 2026'},
+    {id:'MedicationRequest/mr-3920',name:'Atorvastatin',dose:'20 mg once daily',dates:'since 2 Mar 2023'},
+    ...S.extMeds.map(m=>({ms:m})).map(({ms})=>{
+      const map={'ms-a01':['Ibuprofen (OTC)','400 mg as needed, ~2×/week','since 2025'],'ms-a02':['Vitamin D3 (supplement)','2000 IU once daily','since 1 Oct 2025'],'ms-a03':['Omeprazole','20 mg once daily','since 12 Jun 2026; prescribed by another provider']};
+      const r=R['MedicationStatement/'+ms]; const v=map[ms]||[r.title,r.fields[0][1],'reported '+fmt(r.date)];
+      return {id:'MedicationStatement/'+ms,name:v[0],dose:v[1],dates:v[2]};
+    })
+  ];
+  const medsPast = [{id:'MedicationRequest/mr-4102',name:'Amoxicillin',dose:'500 mg three times daily',dates:'10–17 Jan 2026'}];
+  const row = (m,past) => { const r=R[m.id]; return `<tr class="${r.source}${past?' past':''}"><td><b>${esc(m.name)}</b></td><td>${esc(m.dose)}</td><td class="num">${esc(m.dates)}</td><td><span class="src">${mark(r.source)} ${r.source==='clinic'?'This clinic':'Patient'}</span></td><td>${cite(m.id)}</td></tr>`; };
+
+  const hist = [
+    fact(`Lisinopril 10 mg started 14 Aug 2026 (7 weeks ago). Its product information lists dry cough as a common side effect. Patient reports cough onset ${onsetShort} ago.`, ['MedicationRequest/mr-4471',QR]),
+    fact('Hypertension diagnosed 14 Aug 2026; reason lisinopril was started.', ['Condition/c-221'], {when:fmt('2026-08-14')}),
+    fact('Similar episode: cough after an upper respiratory infection, resolved within 10 days.', ['Encounter/enc-1874'], {when:fmt('2025-02-03')}),
+    fact('Chest X-ray: no focal consolidation, heart size normal.', ['DocumentReference/doc-552'], {when:fmt('2025-02-05')}),
+    fact('Allergy: house dust mite, mild rhinitis.', ['AllergyIntolerance/al-090'], {when:fmt('2019-05-11')})
+  ];
+  if(assoc.includes('Heartburn')){
+    hist.splice(1,0, S.extMeds.includes('ms-a03')
+      ? fact('Patient reports heartburn and takes omeprazole 20 mg daily, prescribed by another provider since Jun 2026.', ['MedicationStatement/ms-a03',QR])
+      : fact('Patient reports heartburn. No acid-suppressing medicine recorded.', [QR]));
+  }
+  const lifeRow = (id,text) => { const r=R['Observation/'+id]; const st=isStale(r.date); return fact(text,['Observation/'+id],{when: st?`<span class="stale">Updated ${monthsAgo(r.date)} months ago</span>`:'Updated '+fmt(r.date)}); };
+  const open = [];
+  if(S.extMeds.includes('ms-a03')) open.push('Omeprazole (patient-reported, another provider): indication not given.');
+  if(a.sob!=='No' && a.sob) open.push(`Breathlessness reported (${lc(a.sob)}); onset relative to cough not established.`);
+  open.push('Exposure at home or work (dust, mould, new environment) not covered in the intake.');
+  if(S.life.occ.v && isStale(S.life.occ.d)) open.push(`Occupation record last updated ${monthsAgo(S.life.occ.d)} months ago.`);
+  if(!S.life.occ.v) open.push('Occupation and workload not provided by the patient.');
+  if(a.changes==='Started a new medicine') open.push('Patient said she started a new medicine but did not name it in the chat.');
+
+  return {cc, qr:QR, qa:QUESTIONS.map(q=>[q.label, Array.isArray(a[q.id])?a[q.id].join(', '):String(a[q.id])]),
+    meds:`<div class="table-wrap"><table class="meds"><thead><tr><th>Medicine</th><th>Dose and frequency</th><th>Dates</th><th>Source</th><th>Record</th></tr></thead><tbody>
+      <tr class="grp"><td colspan="5">Current</td></tr>${medsCurrent.map(m=>row(m)).join('')}
+      <tr class="grp"><td colspan="5">Past 12 months</td></tr>${medsPast.map(m=>row(m,true)).join('')}</tbody></table></div>`,
+    hist:hist.join(''),
+    life:(()=>{ const rows=['smk','occ','act'].filter(k=>S.life[k].v).map(k=>{const l=S.life[k]; return lifeRow(l.id, esc(l.v)+(l.wearable?'. Wearable: '+lc(l.wearable.replace(' · ',', '))+'.':(/[.]$/.test(l.v)?'':'.')));}); return rows.join('')||'<span class="small">No relevant lifestyle data. The patient has not provided any.</span>'; })(),
+    open, correction:S.completed?S.correction:''};
+}
+function piotrBrief(){
+  const QR='QuestionnaireResponse/qr-p-1005';
+  const row = (id,name,dose,dates) => { const r=R[id]; return `<tr class="${r.source}"><td><b>${name}</b></td><td>${dose}</td><td class="num">${dates}</td><td><span class="src">${mark(r.source)} Patient</span></td><td>${cite(id)}</td></tr>`; };
+  return {cc:'Right anterior knee pain, gradual onset about 2 weeks ago, worse running and going down stairs. Impact 4/10 at rest, 7/10 when running.', qr:QR,
+    qa:[['Location','Right knee, front, around the kneecap'],['Onset','Gradual, about 2 weeks ago'],['Character','Dull ache; sharp going down stairs'],['Timing','During and after running; after sitting for a long time'],['Swelling, locking, giving way','Mild swelling; no locking; no giving way'],['Triggers','Training for a half-marathon on 25 Oct'],['Relief','Rest; ibuprofen helps partly'],['Impact (0–10)','4 at rest, 7 when running']],
+    meds:`<div class="table-wrap"><table class="meds"><thead><tr><th>Medicine</th><th>Dose and frequency</th><th>Dates</th><th>Source</th><th>Record</th></tr></thead><tbody>
+      <tr class="grp"><td colspan="5">Current</td></tr>${row('MedicationStatement/ms-p01','Ibuprofen (OTC)','400 mg three times daily','last ~10 days')}${row('MedicationStatement/ms-p02','Creatine (supplement)','5 g once daily','since Jul 2026')}
+      <tr class="grp"><td colspan="5">Prescribed at this clinic</td></tr><tr><td colspan="5" class="small">None in the last 24 months.</td></tr></tbody></table></div>`,
+    hist:[fact('Weekly running distance rose from 14 km to 38 km over 5 weeks. Patient reports pain onset about 2 weeks ago.',['Observation/obs-p-run',QR],{when:'24 Aug – 28 Sep 2026'}),
+      fact('Ibuprofen 400 mg three times daily for about 10 days, self-reported. Last kidney function test 13 months ago: creatinine 0.98 mg/dL, within range.',['MedicationStatement/ms-p01','Observation/obs-p-lab']),
+      fact('Right ankle sprain, grade I, during running; physiotherapy referral.',['Encounter/enc-2210'],{when:fmt('2024-06-18')})].join(''),
+    life:[fact('Running about 38 km a week (wearable), up from 14 km in August.',['Observation/obs-p-run'],{when:'Updated '+fmt('2026-10-02')}),
+      fact('Warehouse team lead: physical work, on feet most of the shift, rotating shifts.',['Observation/obs-p-occ'],{when:`<span class="stale">Updated ${monthsAgo('2026-03-01')} months ago</span>`})].join(''),
+    open:['Footwear, running surface or route changes not covered in the intake.','Whether the patient still plans to run the half-marathon on 25 Oct.',`Occupation record last updated ${monthsAgo('2026-03-01')} months ago.`], correction:''};
+}
+
+function briefView(p){
+  const st = statusOf(p);
+  const headSub = `${p.age} · ${p.sex==='F'?'female':'male'} · ${p.t} today`;
+  if(st==='urgent'){
+    const txt = p.id==='anna' ? S.urgentText : p.urgentText;
+    return `<section class="brief" aria-label="Patient brief"><div class="brief-head"><div><h1>${p.name}</h1><div class="sub num">${headSub}</div></div>${pill(st)}</div>
+      <div class="urgent-card"><h2>Flagged by the emergency safety net</h2><p style="margin:0">${esc(txt)}</p>
+      <p class="small" style="margin:0">Red-flag rules are deterministic, not AI. Intake stopped at the flag, so there is no brief for this patient.</p>
+      <div class="actions"><button class="btn danger" data-action="toast" data-v="Marked as contacted">Mark as contacted</button></div></div></section>`;
+  }
+  if(st==='none' || st==='progress'){
+    return `<section class="brief" aria-label="Patient brief"><div class="brief-head"><div><h1>${p.name}</h1><div class="sub num">${headSub}</div></div>${pill(st)}</div>
+      <div class="empty"><h2>${st==='progress'?'The patient is still answering':'No intake yet'}</h2><p>The brief appears here once the patient confirms their summary. ${st==='none'?'A reminder text goes out 24 hours before the visit.':''}</p></div></section>`;
+  }
+  const b = p.id==='anna' ? annaBrief() : piotrBrief();
+  return `<section class="brief" aria-label="Pre-visit brief">
+    <div class="brief-head"><div><h1>${p.name}</h1><div class="sub num">${headSub} · intake confirmed by patient</div></div>
+      <div class="actions">${pill(st,p)}<button class="btn secondary" data-action="copy" data-id="${p.id}">Copy brief</button><button class="btn" data-action="review" data-id="${p.id}">${S.reviewed[p.id]?'Reviewed':'Mark as reviewed'}</button></div></div>
+    <div class="legend"><span>${mark('clinic')} Clinic record</span><span>${mark('patient')} Patient-reported</span><span>Select any record ID to open the original.</span></div>
+    <div class="sec"><h2>Chief complaint</h2><div class="body"><div class="cc">${esc(b.cc)}</div><div>${cite(b.qr)}</div></div></div>
+    <div class="sec"><h2>Intake answers</h2><div class="body"><dl class="qa">${b.qa.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${b.correction?`<div class="correction"><b>Patient correction:</b> ${esc(b.correction)}</div>`:''}</div></div>
+    <div class="sec"><h2>Medication overview</h2><div class="body">${b.meds}<span class="small">Reconcile with the patient: patient-reported entries are not verified by the clinic.</span></div></div>
+    <div class="sec"><h2>Relevant history</h2><div class="body">${b.hist}</div></div>
+    <div class="sec"><h2>Relevant lifestyle</h2><div class="body">${b.life}</div></div>
+    <div class="sec"><h2>Open questions</h2><div class="body"><ul class="ul">${b.open.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div></div>
+    <div class="brief-foot">${icon.info}<span>This brief organises information only. It contains no diagnoses, risk scores or suggested actions. Every statement is checked against its source record before it is shown.</span></div>
+  </section>`;
+}
+function doctorView(){
+  const p = DAY.find(d=>d.id===S.selected);
+  const list = DAY.map(d=>{const st=statusOf(d);return `<li><button data-action="select" data-id="${d.id}" aria-current="${d.id===S.selected}" class="${st==='urgent'?'urgent':''}"><span class="t">${d.t}</span><span class="n">${d.name}</span><span class="s">${pill(st,d)}</span></button></li>`}).join('');
+  return `<div class="desk"><nav class="day" aria-label="Today's appointments"><div class="day-head"><h2>Monday 5 October</h2><span class="small">${DOCTOR} · ${DAY.length} visits</span></div><ul class="appts">${list}</ul></nav>${briefView(p)}</div>`;
+}
+
+/* ================= Drawer & toast ================= */
+function overlay(){
+  let h='';
+  if(S.drawer){
+    const r=R[S.drawer];
+    h += `<div class="scrim" data-action="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-t">
+      <div class="drawer-head"><div style="display:grid;gap:4px"><span class="src">${mark(r.source)} ${srcLabel(r.source)} · ${r.type}</span><h2 id="dr-t">${esc(r.title)}</h2><span class="small num">${fmt(r.date)}</span></div><button class="x" data-action="close" aria-label="Close source record">${icon.x}</button></div>
+      <div class="drawer-body"><div class="verified">${icon.check} Citation verified: this record exists and supports the statement.</div>
+        <dl class="kv">${r.fields.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+        <details><summary>FHIR resource ${esc(r.type)}/${esc(r.id)}</summary><pre>${esc(JSON.stringify(r.raw,null,2))}</pre></details>
+      </div></aside>`;
+  }
+  if(S.toast) h += `<div class="toast" role="status">${esc(S.toast)}</div>`;
+  return h;
+}
+let toastTimer;
+function toast(t){ S.toast=t; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{S.toast=null;renderOverlay();},2200); renderOverlay(); }
+
+/* ================= Render ================= */
+const app = document.getElementById('app'), ov = document.getElementById('overlay');
+function render(){
+  document.getElementById('tab-patient').setAttribute('aria-pressed', S.view==='patient');
+  document.getElementById('tab-doctor').setAttribute('aria-pressed', S.view==='doctor');
+  app.innerHTML = S.view==='patient' ? patientView() : doctorView();
+  const pb = document.getElementById('pbody'); if(pb && S.step==='chat') pb.scrollTop = pb.scrollHeight;
+  renderOverlay();
+}
+function renderOverlay(){ ov.innerHTML = overlay(); }
+
+/* ================= Chat logic ================= */
+function aiSay(text, after){
+  S.typing = true; render();
+  setTimeout(()=>{ S.typing=false; S.msgs.push({from:'ai',text}); if(after) after(); render(); const i=document.getElementById('say'); if(i && window.innerWidth>480) i.focus(); }, 550);
+}
+function triggerEmergency(reason){
+  S.step='emergency'; S.urgent=true;
+  S.urgentText = `${reason} Reported in intake chat. Patient was told to call 112 and the chat stopped.`;
+  render();
+}
+const VOICE = {complaint:"I've had a dry cough for about three weeks and it's worse at night",onset:'About 3 weeks ago',character:'Dry',timing:'At night',assoc:'Heartburn',sob:'No',changes:'Started a new medicine',severity:'5'};
+let voiceTimer;
+function finishVoice(){ clearTimeout(voiceTimer); if(S.voice!=='listening') return; S.voice=null; const q=QUESTIONS[S.qi]; S.draft=VOICE[q.id]||''; S.lastVoice=true; render(); const i=document.getElementById('say'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } }
+function answer(val, typed, voice){
+  const q = QUESTIONS[S.qi];
+  S.msgs.push({from:'me', text: Array.isArray(val)?val.join(', '):String(val), voice:!!voice});
+  S.draft=''; S.lastVoice=false;
+  if(typed && REDFLAG_RX.test(val)) return triggerEmergency(`Patient ${voice?'said':'typed'}: "${val}".`);
+  if(typed && q.type==='multi' && !Array.isArray(val)) val = val.split(/,| and /i).map(x=>x.trim()).filter(Boolean).map(x=>x.charAt(0).toUpperCase()+x.slice(1));
+  if(typed && q.type==='scale'){ const n=parseInt(val,10); if(!isNaN(n)) val=String(Math.max(0,Math.min(10,n))); }
+  if(q.redflag && q.redflag.includes(val)) return triggerEmergency(`Breathlessness at rest.`);
+  S.answers[q.id] = (q.type==='scale' && !isNaN(Number(val))) ? Number(val) : val;
+  S.qi++; S.multi=[];
+  if(S.qi < QUESTIONS.length) aiSay(QUESTIONS[S.qi].text);
+  else aiSay("Thank you, that's everything I need. Next you'll see a summary to check before it goes to Dr. Wiśniewska.");
+}
+
+/* ================= Events ================= */
+document.addEventListener('click', e=>{
+  const el = e.target.closest('[data-action]'); if(!el) return;
+  const a = el.dataset.action, v = el.dataset.v, id = el.dataset.id;
+  if(a==='ack') return; // handled by change
+  if(a==='view'){ S.view=v; S.drawer=null; try{localStorage.setItem('vc-view',v)}catch(_){} render(); window.scrollTo(0,0); }
+  if(a==='reset'){ Object.keys(R).forEach(k=>delete R[k]); Object.assign(R, JSON.parse(JSON.stringify(R0))); S=fresh(); try{S.view=localStorage.getItem('vc-view')||'patient'}catch(_){} render(); toast('Demo reset'); }
+  if(a==='go'){ S.step=v; render(); }
+  if(a==='ptab'){ S.ptab=v; S.editing=null; S.adding=false; S.wiping=false; render(); }
+  if(a==='editlife'){ S.editing=el.dataset.k||null; render(); if(S.editing){ const i=document.getElementById('life-'+S.editing); i.focus(); i.select(); } }
+  if(a==='clearlife'){ const k=el.dataset.k; S.life[k].v=''; S.life[k].d=PATIENT_TODAY; syncLife(k); S.editing=null; render(); toast(`Deleted ${S.life[k].label.toLowerCase()} entry`); }
+  if(a==='wiping'){ S.wiping=!S.wiping; render(); }
+  if(a==='wipe'){ Object.keys(S.life).forEach(k=>{S.life[k].v='';S.life[k].d=PATIENT_TODAY;syncLife(k);}); S.extMeds=[]; S.wiping=false; render(); toast('Profile data deleted'); }
+  if(a==='mic'){ S.voice='listening'; S.draft=''; render(); voiceTimer=setTimeout(finishVoice,2400); }
+  if(a==='stopvoice') finishVoice();
+  if(a==='startchat'){ S.step='chat'; S.msgs=[]; S.qi=0; S.answers={}; aiSay(QUESTIONS[0].text); }
+  if(a==='adding'){ S.adding=!S.adding; render(); if(S.adding) document.getElementById('m-name').focus(); }
+  if(a==='delmed'){ const t=R['MedicationStatement/'+id].title; S.extMeds=S.extMeds.filter(m=>m!==id); render(); toast(`Removed ${t}`); }
+  if(a==='answer') answer(v);
+  if(a==='toggle'){ if(v==='None of these') S.multi = S.multi.includes(v)?[]:[v]; else { S.multi=S.multi.filter(x=>x!=='None of these'); S.multi = S.multi.includes(v)?S.multi.filter(x=>x!==v):[...S.multi,v]; } render(); }
+  if(a==='multidone') answer([...S.multi]);
+  if(a==='correct'){ S.correcting=true; render(); document.getElementById('corr').focus(); }
+  if(a==='savecorr'){ S.correction=document.getElementById('corr').value.trim(); S.correcting=false; render(); }
+  if(a==='confirm'){ if(S.correcting){ S.correction=(document.getElementById('corr')||{value:S.correction}).value.trim(); S.correcting=false; } S.completed=true; S.reviewed.anna=false; S.selected='anna'; S.step='sent'; render(); }
+  if(a==='select'){ S.selected=id; render(); }
+  if(a==='open'){ S.drawer=id; renderOverlay(); const x=ov.querySelector('.x'); if(x) x.focus(); }
+  if(a==='close'){ S.drawer=null; renderOverlay(); }
+  if(a==='review'){ S.reviewed[id]=true; render(); toast('Marked as reviewed'); }
+  if(a==='toast') toast(v);
+  if(a==='copy'){
+    const p=DAY.find(d=>d.id===id); const b=id==='anna'?annaBrief():piotrBrief();
+    const strip = h => h.replace(/<button[^>]*>.*?<\/button>/g,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    const txt = [`Pre-visit brief: ${p.name}, ${p.age}, ${p.t}`,`Chief complaint: ${b.cc}`,'Intake answers:',...b.qa.map(([k,v])=>`- ${k}: ${v}`),'Relevant history:',strip(b.hist),'Open questions:',...b.open.map(o=>'- '+o),'(VitalContext: information only, no diagnosis)'].join('\n');
+    const ok=()=>toast('Brief copied');
+    try{ navigator.clipboard.writeText(txt).then(ok,()=>toast('Copy blocked here. Select the text manually.')); }catch(_){ toast('Copy blocked here. Select the text manually.'); }
+  }
+});
+document.addEventListener('input', e=>{ if(e.target.id==='say'){ S.draft=e.target.value; if(!e.target.value) S.lastVoice=false; } });
+document.addEventListener('change', e=>{ if(e.target.id==='ack'){ S.ack=e.target.checked; render(); } if(e.target.id==='truthful'){ S.truthful=e.target.checked; render(); } });
+document.addEventListener('submit', e=>{
+  e.preventDefault();
+  const f = e.target.dataset.form;
+  if(f==='say'){ const i=document.getElementById('say'); const t=i.value.trim(); if(t) answer(t,true,S.lastVoice); }
+  if(f==='life'){ const k=e.target.dataset.k; const v=document.getElementById('life-'+k).value.trim(); S.life[k].v=v; S.life[k].d=PATIENT_TODAY; syncLife(k); S.editing=null; render(); toast(v?`Saved ${S.life[k].label.toLowerCase()}`:`Deleted ${S.life[k].label.toLowerCase()} entry`); }
+  if(f==='addmed'){
+    const n=document.getElementById('m-name').value.trim(); if(!n) return;
+    const dose=document.getElementById('m-dose').value.trim(), fq=document.getElementById('m-freq').value.trim();
+    const mid='ms-a'+(100+Object.keys(R).length);
+    const st=document.getElementById('m-start').value.trim(), who=document.getElementById('m-who').value.trim();
+    rec('MedicationStatement',mid,'patient',n,'2026-10-04',[['Dosage',[dose,fq].filter(Boolean).join(', ')||'Not given'],...(st?[['Started',st]]:[]),...(who?[['Prescriber',who]]:[]),['Reported by','Patient, profile entry']],{status:'active',medicationCodeableConcept:{text:n},informationSource:{reference:'Patient/anna-k'},dateAsserted:'2026-10-04'});
+    S.extMeds.push(mid); S.adding=false; render(); toast(`Added ${n}`);
+  }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && S.drawer){ S.drawer=null; renderOverlay(); } });
+S = fresh();
+try{ const v = localStorage.getItem('vc-view'); if(v) S.view = v; }catch(e){}
+render();
+</script>
