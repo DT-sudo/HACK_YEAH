@@ -125,11 +125,37 @@ def build_context_pack(fhir: FhirStore, patient_id: str, category: str) -> Conte
                 selected.append(("wearable", r))
     selected += [("lab", r) for r in labs_latest.values()]
 
+    if cfg.get("vitals"):  # latest vital signs (e.g. baseline before a stimulant)
+        vit: dict[str, dict] = {}
+        for r in all_res:
+            cat_codes = {c.get("code") for cat in r.get("category", []) for c in cat.get("coding", [])}
+            if r["resourceType"] == "Observation" and "vital-signs" in cat_codes:
+                k = title_of(r)
+                if k not in vit or (date_of(r) or "") > (date_of(vit[k]) or ""):
+                    vit[k] = r
+        selected += [("vital", r) for r in vit.values()]
+
+    # Public registry product information for the medicines in the pack (shared reference data).
+    for ref in {drug_facts(med_view(r)["name"], med_view(r)["atc"]).get("registry_ref") for r in med_refs.values()} - {None}:
+        doc = fhir.read(*ref.split("/", 1))
+        if doc:
+            selected.append(("registry_entry", doc))
+
     life = latest_lifestyle([r for r in all_res if r["resourceType"] == "Observation"])
     for key in cfg.get("lifestyle", []):
         r = life.get(key)
         if r and r.get("valueString"):
             selected.append(("lifestyle", r))
+
+    checkin_summary = None
+    if cfg.get("checkins"):
+        from app.services import trends
+        t = trends.build(fhir, patient_id)
+        if t and t["summary"]["after"]["days"]:
+            lst = fhir.read("List", f"list-checkins-{patient_id}")
+            if lst:
+                selected.append(("checkins", lst))
+                checkin_summary = t
 
     # ---- pseudonymise ----------------------------------------------------------------------
     records, ref_map, profile_refs = [], {}, []
@@ -142,8 +168,9 @@ def build_context_pack(fhir: FhirStore, patient_id: str, category: str) -> Conte
         src = source_of(r)
         if src == "patient" and r["resourceType"] in ("MedicationStatement", "Observation"):
             profile_refs.append(ref_of(r))
+        details = _checkins_details(checkin_summary) if kind == "checkins" else _details(kind, r, fhir_to_r)
         records.append({"ref": rid, "kind": kind, "source": src, "date": (date_of(r) or "")[:10],
-                        "title": title_of(r), "details": _details(kind, r, fhir_to_r)})
+                        "title": title_of(r) if kind != "checkins" else "Daily check-ins (summary)", "details": details})
 
     sex = patient.get("gender")
     pack = {
@@ -153,6 +180,15 @@ def build_context_pack(fhir: FhirStore, patient_id: str, category: str) -> Conte
         "records": records,
     }
     return ContextPack(pack, ref_map, total_records=len(all_res), profile_refs=profile_refs)
+
+
+def _checkins_details(t: dict) -> dict:
+    """Aggregates only: the model never sees the individual daily entries or free-text notes."""
+    s = t["summary"]
+    return {"since": t["since"], "split_date": s["split"], "split_label": s["splitLabel"],
+            "before": s["before"], "after": s["after"], "medicine": dict(s["med"]),
+            "appetite_reduced_days": s["appetiteReduced"], "side_effect_days": dict(s["side"]),
+            "trigger_days": dict(s["triggers"]), "focus_lost_days": dict(s["focusLost"])}
 
 
 def _details(kind: str, r: dict, fhir_to_r: dict[str, str]) -> dict:
@@ -167,7 +203,18 @@ def _details(kind: str, r: dict, fhir_to_r: dict[str, str]) -> dict:
              "used_for": facts.get("used_for", []), "lab_watch": facts.get("lab_watch", [])}
         if m["reason_ref"] in fhir_to_r:
             d["reason_ref"] = fhir_to_r[m["reason_ref"]]
+        if facts.get("registry_ref") in fhir_to_r:
+            d["registry_ref"] = fhir_to_r[facts["registry_ref"]]
+            d["registry_effects"] = [{"term": e["term"], "freq": e["freq"], "aliases": e.get("aliases", [])}
+                                     for e in facts.get("effects", [])]
         return d
+    if kind == "registry_entry":
+        return {"source": "public registry (URPL, simulated snapshot)", "text": r.get("description", "")}
+    if kind == "vital":
+        comps = [str((c.get("valueQuantity") or {}).get("value")) for c in r.get("component", [])]
+        q = r.get("valueQuantity") or {}
+        return {"name": title_of(r), "value": "/".join(comps) if comps else str(q.get("value")),
+                "unit": "mmHg" if comps else q.get("unit", "")}
     if kind == "condition":
         return {"name": title_of(r), "status": next((c.get("code") for c in codings(r, "clinicalStatus")), None),
                 "onset": r.get("onsetDateTime")}
@@ -197,5 +244,10 @@ def _details(kind: str, r: dict, fhir_to_r: dict[str, str]) -> dict:
         if wearable_kind(r) == "running-weekly":
             return {"metric": "running distance", "unit": comps[0]["unit"] if comps else "km",
                     "series": [{"period": c["label"], "value": c["value"]} for c in comps]}
+        if wearable_kind(r) in ("rhr-daily", "sleep-daily"):  # daily aggregates: send a summary, not the series
+            vals = [c["value"] for c in comps if c["value"] is not None]
+            return {"metric": title_of(r), "unit": comps[0]["unit"] if comps else "", "days": len(vals),
+                    "first_day": comps[0]["label"] if comps else None, "last_day": comps[-1]["label"] if comps else None,
+                    "mean": round(sum(vals) / len(vals), 1) if vals else None}
         return {"summary": comps}
     return {}

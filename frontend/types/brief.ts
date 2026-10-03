@@ -2,7 +2,7 @@
 // GET /doctor/patients/{pid}/briefs/{bid}. Source (clinic vs patient) is derived by the backend
 // from the cited FHIR resource, never from text an LLM wrote.
 
-export type Source = "clinic" | "patient";
+export type Source = "clinic" | "patient" | "registry";
 
 export type Citation = {
   reference: string; // "MedicationRequest/mr-4471"
@@ -26,8 +26,33 @@ export type MedicationRow = {
   dates: string;
   note: string | null;
   status: "current" | "past";
-  source: Source;
+  source: "clinic" | "patient";
   reconciled: { by: string; at: string } | null;
+};
+
+export type TrendPoint = {
+  date: string;
+  ref: string | null; // the day's check-in (QuestionnaireResponse), if any
+  focus: number | null;
+  sleepSelf: number | null;
+  sleepDevice: number | null;
+  restingHr: number | null;
+  med: "on_time" | "late" | "missed" | null;
+  appetite: "normal" | "lower" | "skipped" | null;
+  sideEffects: string[];
+  triggers: string[];
+  focusLost: string[];
+  note: string | null;
+};
+
+export type FollowUp = {
+  since: string;
+  split: string | null;
+  splitLabel: string | null;
+  series: TrendPoint[];
+  events: { date: string; label: string; ref: string; active: boolean }[];
+  listRef: string;
+  notes: { date: string; text: string; ref: string }[];
 };
 
 export type Brief = {
@@ -43,6 +68,9 @@ export type Brief = {
   relevantHistory: Fact[];
   lifestyle: LifestyleFact[];
   openQuestions: string[];
+  trends: Fact[];
+  consistency: Fact[];
+  followUp: FollowUp | null;
   reviewed: { by: string; at: string } | null;
   generation: {
     provider: string;

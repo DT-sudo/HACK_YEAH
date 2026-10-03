@@ -12,22 +12,72 @@ Original clickable prototype: [`vitalcontext/index.html`](vitalcontext/index.htm
 
 All patients are synthetic. No real patient data is used.
 
-## Run it (two terminals, no Docker needed)
+## Who it's for (MVP scope)
+
+**Tech-literate adults aged 25–40 managing a newly diagnosed condition between visits.** The demo case is
+ADHD medication titration, where the psychiatrist needs to know what happened day by day since the last
+visit: focus, sleep, appetite, side effects, missed doses. Between visits the patient does a one-minute
+daily check-in; before the visit, a short AI-guided chat. The doctor gets:
+
+- **Since last visit:** daily trends around the dose change, from check-ins and wearable aggregates.
+- **Public registry data:** medicine side effects from the Polish registry of medicinal products (URPL,
+  a simulated snapshot for the demo), cited as a third source next to clinic and patient data.
+- **Consistency check:** where the patient's chat answers differ from their check-ins, device data or
+  clinic records (e.g. "none of these side effects" vs. racing heart on 3 days and a resting heart rate
+  of 63 → 71 bpm). Computed by code, framed as a conversation prompt, never a verdict.
+
+Starting with this group is a deliberate choice for safety and data integrity. Accessibility for older
+patients, proxies and carers is on the roadmap, not in the MVP. The original general-practice flow
+(Dr. Ewa Wiśniewska's day: cough, knee pain, safety-net case) is still included.
+
+## Run it: one command
 
 ```bash
-# 1. API  → http://localhost:8000  (OpenAPI docs at /docs)
-cd backend
-uv sync
-uv run uvicorn app.main:app --port 8000
-
-# 2. Web  → http://localhost:3000
-cd frontend
-npm install
-npm run dev
+docker compose up
 ```
 
-The API seeds the synthetic data set on every start. **Reset demo** in the top bar (or `POST /demo/reset`)
-restores it at any time.
+Then open **http://localhost:3000**. The API and its docs are at http://localhost:8000/docs.
+
+This starts `web` (Next.js), `api` (FastAPI), PostgreSQL and Redis. Only `web` and `api` publish ports;
+Postgres and Redis sit on an internal network. The API seeds the synthetic data set on start, and `web`
+comes up once the API is healthy. FHIR resources live in the API's built-in FHIR store. Stop with
+`Ctrl+C`, or `docker compose down` (add `-v` to also drop the Postgres volume).
+
+**Reset demo** in the top bar (or `POST /demo/reset`) restores the seeded state at any time.
+
+To run a separate **HAPI FHIR** server, the full `ARCHITECTURE.md` topology, add the override file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.hapi.yml up --build
+```
+
+HAPI is a large image (~450 MB) and needs 1–2 minutes to boot. The API waits for it, then seeds it.
+
+**First run vs. later runs.** The first `docker compose up` builds the two app images. That needs internet
+access to Docker Hub for the base images and to npm/PyPI for dependencies, and takes several minutes on a
+slow connection. After that, `docker compose up` starts from the local images with no network needed.
+Only use `docker compose up --build` after changing the code. `--build` re-checks the base images
+on Docker Hub every time, so it fails when Docker Hub is unreachable.
+
+**Troubleshooting**
+
+- `failed to resolve source metadata ... TLS handshake timeout`: Docker couldn't reach Docker Hub.
+  If the images were built before, run `docker compose up` without `--build`. Otherwise retry once the
+  connection is stable, or configure a registry mirror in Docker Desktop (Settings → Docker Engine).
+- `unknown flag: --build`: flags go after the subcommand: `docker compose up --build`, not
+  `docker compose --build up`.
+- Port 3000 or 8000 already in use: stop the other process, or a dev server started from `npm run dev` /
+  `uvicorn`.
+
+### Without Docker (two terminals)
+
+```bash
+# API → http://localhost:8000 (in-process FHIR store, SQLite, no containers)
+cd backend && uv sync && uv run uvicorn app.main:app --port 8000
+
+# Web → http://localhost:3000
+cd frontend && npm install && npm run dev
+```
 
 ### AI provider
 
@@ -39,38 +89,38 @@ restores it at any time.
 
 The offline engine is also the **safe fallback**. If the model is unavailable or its output fails
 validation twice, the intake continues with the framework questionnaire and the brief is built by rules.
-The product degrades instead of breaking. Copy `backend/.env.example` to `backend/.env` to configure it.
+The product degrades instead of breaking.
 
-### Production-like topology
+With Docker, put `ANTHROPIC_API_KEY=...` in a `.env` file next to `docker-compose.yml` (git-ignored).
+Without Docker, copy `backend/.env.example` to `backend/.env`.
 
-`docker compose up --build` starts `api`, `web`, PostgreSQL, HAPI FHIR and Redis, with only `api` and
-`web` exposed (see [`docker-compose.yml`](docker-compose.yml)). Untested here: Docker wasn't running on
-the build machine. HAPI keeps resources created during a demo; run `docker compose down -v` for a clean
-slate.
+## Demo script (≈3 minutes, ADHD follow-up)
 
-## Demo script (≈3 minutes)
+Defaults: patient **Natalia Zając** (28, methylphenidate ER, dose raised 18 → 27 mg on 17 Sep) and
+doctor **Dr. Marta Kaczmarek** (psychiatrist).
 
-1. **Patient app** (Anna Kowalska, 52). The app opens straight into the chat, with the AI disclosure
-   pinned at the top. Tap the demo shortcut, or say *"I've had a dry cough for about three weeks and it's
-   worse at night"* with the mic (Chrome / Edge / Safari, PL or EN). Onset, character and timing are
-   extracted from that one answer, so the assistant skips those questions.
-2. Answer the remaining 3 questions → **Review my summary** → tick *"true to the best of my knowledge"* → **Confirm**.
-3. **Doctor dashboard**: Anna now shows *Brief updated just now*. Look at:
-   - the lisinopril → dry cough connection, citing both the prescription and the intake;
-   - the medication table that merges clinic prescriptions with patient-reported medicines;
-   - the stale *Work* record flag;
-   - any record chip, which opens the original FHIR resource ("Citation verified").
-4. Back in **Profile**: update *Work* and the stale flag disappears from the brief within seconds. Remove
-   *Omeprazole* and you get a 409, because it is now part of the medical record. *Mark as no longer taking*
-   moves it to "Past" in the brief.
-5. **Safety net**: switch to another patient (e.g. Tomasz) and type *"ból w klatce"* or *"chest pain"*.
-   The chat stops, a calm 112 screen appears and the patient is pinned as **Urgent** for the doctor.
-   Marek (08:00) shows a pre-seeded case.
-6. **Break-glass**: in the day list, open patient `jan-k` (Dr. Mazur's patient) with a written reason.
-   **Audit log** shows every access, plus the LLM gateway metadata, which contains no content.
+1. **Patient app → Daily.** Do today's check-in: medicine, focus 0–10, when focus dropped, triggers,
+   sleep, appetite, side effects, optional note. Fixed questions, no AI. "Your entries" shows the
+   last four weeks.
+2. **Patient app → Home.** The pre-visit chat opens with a follow-up question. Tap the demo shortcut,
+   then answer, e.g. "Every day" for the medicine and "None of these" for side effects →
+   **Review my summary** → confirm.
+3. **Doctor dashboard** (Natalia shows *Brief updated just now*):
+   - **Since last visit:** focus, sleep (reported vs. wearable) and resting heart rate, with the dose
+     change marked. Hover for any day; "Show as table" gives the same data.
+   - **Relevant history:** the methylphenidate statement cites the prescription, the **URPL registry**
+     entry (diamond mark) and the check-ins.
+   - **Consistency check:** "every day" vs. 2 missed doses; "none of these" vs. racing heart and the
+     heart-rate rise; reported vs. wearable sleep; melatonin in the profile but not mentioned in the chat.
+   - Every chip opens the original record.
+4. **Safety net:** in Daily, write "chest pain" (or "ból w klatce") in the note. The patient gets the
+   calm 112 screen and the case turns **Urgent** for the doctor. Kamila (09:00) is a pre-seeded case.
+5. **Other states:** Bartosz (brief ready, with his own consistency findings) and Michał (no chat yet,
+   but his check-in trends are already visible).
+6. **Audit log:** every access, plus LLM gateway metadata with no content.
 
-Other seeded states: Piotr (knee pain, brief ready from a voice intake; wearable running load
-14 → 38 km/week), Zofia (intake in progress), Halina and Tomasz (not started).
+The GP flow still works: switch the doctor to Dr. Ewa Wiśniewska and the patient to Anna Kowalska
+(cough, lisinopril) or Piotr Nowak (knee pain, running load).
 
 ## How the spec maps to code
 
@@ -85,8 +135,12 @@ Other seeded states: Piotr (knee pain, brief ready from a voice intake; wearable
 | Profile in FHIR; deletable until documented, then `409` + "mark not current" | `services/profile.py` |
 | `patient_id` only from the token; doctor access via care assignment; audited break-glass | `api/deps.py`, `api/doctor.py` |
 | Explicit response models (nothing internal can leak) | `api/models.py` |
-| FHIR R4 store (local in-process or HAPI) | `fhir/client.py`, `fhir/seed.py` |
-| Eval set: golden, injection, red-flag, leakage + API rules | `backend/tests/` → `uv run pytest` (52 tests) |
+| FHIR R4 store (built-in, or HAPI via `docker-compose.hapi.yml`) | `fhir/client.py`, `fhir/seed.py` |
+| Daily check-ins (care-plan enabled, fixed questionnaire, safety-checked, one `QuestionnaireResponse` per day) | `config/checkins.yaml`, `services/checkins.py`, `frontend/app/patient/daily` |
+| Since-last-visit trends and consistency check (code, not AI) | `services/trends.py`, `frontend/components/TrendChart.tsx` |
+| Public registry side effects as a citable third source (simulated URPL snapshot) | `config/registry_snapshot.yaml`, `services/knowledge.py` |
+| ADHD follow-up question bank (EN/PL) | `llm/framework.py` (`ADHD_FOLLOWUP`), `fhir/seed_adhd.py` |
+| Eval set: golden, injection, red-flag, leakage, follow-up + API rules | `backend/tests/` → `uv run pytest` (57 tests) |
 
 ## Repository
 
@@ -94,7 +148,8 @@ Other seeded states: Piotr (knee pain, brief ready from a voice intake; wearable
 backend/    FastAPI modular monolith (Python 3.13, uv)
 frontend/   Next.js 16 + TypeScript + Tailwind v4 + lucide-react; PL/EN, light/dark
 vitalcontext/  original single-file prototype and the front-end build prompt
-docker-compose.yml
+docker-compose.yml        web + api + PostgreSQL + Redis (one-command start)
+docker-compose.hapi.yml   optional override: separate HAPI FHIR server
 ```
 
 ## Known gaps (hackathon scope)
@@ -103,6 +158,10 @@ docker-compose.yml
   Whisper) is not built: when a browser has no speech support, the patient sees a clear message and types.
 - The `anthropic` provider is wired and schema-checked, but this build was verified with the offline engine.
   Run one intake with a key before presenting with Claude.
+- The URPL registry data is a **simulated snapshot** with the registry's structure (SmPC section 4.8
+  frequency groups) and abridged values, not a live sync. Production would sync it from the public registry
+  and keep the registry ID and version for every fact.
+- Wearable data is seeded as daily aggregates. There is no live device integration.
 - The frontend talks to the real API only. There is no separate mock-JSON mode.
 - UI components are hand-written in the prototype's design language rather than generated with shadcn/ui.
   i18n is a small typed dictionary (`locales/en.json`, `locales/pl.json`) rather than next-intl.

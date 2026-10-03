@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import doctor, patient, system
 from app.db.session import SessionLocal, create_schema, reset_schema
-from app.fhir.client import get_fhir
+from app.fhir.client import HapiFhirStore, get_fhir
 from app.fhir.seed import seed
 from app.services import session_cache
 from app.settings import get_settings
@@ -26,6 +26,9 @@ def reset_demo() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    fhir = get_fhir()
+    if isinstance(fhir, HapiFhirStore):
+        fhir.wait_until_ready()
     if get_settings().seed_on_startup:
         reset_demo()
     else:

@@ -61,7 +61,9 @@ def now() -> datetime:
 
 
 def iso_now() -> str:
-    return now().isoformat()
+    """FHIR-valid timestamp (a dateTime with a time part must carry a time zone)."""
+    offset = datetime.now().astimezone().strftime("%z")
+    return now().isoformat() + f"{offset[:3]}:{offset[3:]}"
 
 
 def midnight(d: date) -> datetime:

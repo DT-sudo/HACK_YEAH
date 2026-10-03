@@ -1,13 +1,13 @@
 // All data access goes through here. The FastAPI backend is the single source of truth.
 import type {
-  AuditEntry, Day, DayPatient, DemoUser, Intake, LlmCall, Me, Profile, Role, Summary, SystemInfo,
+  AuditEntry, CheckinState, Day, DayPatient, DemoUser, Intake, LlmCall, Me, Profile, Role, Summary, SystemInfo,
 } from "@/types/api";
-import type { Brief, SourceRecord } from "@/types/brief";
+import type { Brief, Fact, FollowUp, SourceRecord } from "@/types/brief";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const TOKEN_KEY = (role: Role) => `vc-token-${role}`;
-const USER_KEY = (role: Role) => `vc-user-${role}`;
+const TOKEN_KEY = (role: Role) => `vc2-token-${role}`; // v2: ADHD follow-up demo defaults
+const USER_KEY = (role: Role) => `vc2-user-${role}`;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -110,7 +110,12 @@ export const api = {
   confirm: (id: string, truthful: boolean, correction: string | null) =>
     request<Intake>(`/me/intakes/${id}/confirm`, { role: P, method: "POST", body: json({ truthful, correction }) }),
 
+  checkins: (lang: "en" | "pl") => request<CheckinState>(`/me/checkins?lang=${lang}`, { role: P }),
+  submitCheckin: (answers: Record<string, number | string | string[]>, lang: "en" | "pl") =>
+    request<CheckinState>("/me/checkins", { role: P, method: "POST", body: json({ answers, lang }) }),
+
   // doctor
+  trends: (pid: string) => request<{ followUp: FollowUp | null; trends: Fact[] }>(`/doctor/patients/${pid}/trends`, { role: D }),
   day: () => request<Day>("/doctor/patients", { role: D }),
   brief: (pid: string, bid: string) => request<Brief>(`/doctor/patients/${pid}/briefs/${bid}`, { role: D }),
   briefText: (pid: string, bid: string) => request<string>(`/doctor/patients/${pid}/briefs/${bid}/text`, { role: D }),

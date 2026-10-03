@@ -21,6 +21,7 @@ from app.llm.gateway import get_gateway
 from app.llm.mock_provider import MockProvider
 from app.llm.validation import has_diagnostic_wording
 from app.services.context import build_context_pack, latest_lifestyle
+from app.services import trends as trends_service
 from app.services.knowledge import relevance
 from app.services.profile import LIFESTYLE, STALE_MONTHS
 from app.settings import iso_now, today
@@ -51,7 +52,8 @@ def generate(db: Session, fhir: FhirStore, s: IntakeSession, qr_ref: str, gatewa
         "category": s.category,
         "chief_complaint": {"text": cc, "refs": [ctx.ref_map[q1]]},
         "patient_words": [a["value"] for a in s.answers if a.get("verbatim") or a["slot"] == "complaint"],
-        "answers": [{"label": a["label"], "answer": a["value"]} for a in s.answers if a["slot"] != "complaint"],
+        "answers": [{"label": a["label"], "answer": a["value"]} for a in s.answers if not a.get("verbatim") and a["slot"] != "complaint"],
+        "answers_by_slot": {a["slot"]: a["value"] for a in s.answers},
         "correction": s.correction,
         "connections": connections,
         "open_questions": open_q,
@@ -61,11 +63,11 @@ def generate(db: Session, fhir: FhirStore, s: IntakeSession, qr_ref: str, gatewa
                        "instruction_like_input": bool(s.flags.get("instruction_like_input"))},
     }
     sections = [
-        {"title": "Chief complaint", "text": {"status": "generated", "div": f"<div>{_esc(cc)}</div>"},
+        {"title": "Chief complaint", "text": {"status": "generated", "div": _div(_esc(cc))},
          "entry": [{"reference": ctx.ref_map[q1]}]},
         {"title": "Relevant history", "entry": [{"reference": r} for c in connections for r in c["refs"]],
-         "text": {"status": "generated", "div": "<div>" + "".join(f"<p>{_esc(c['statement'])}</p>" for c in connections) + "</div>"}},
-        {"title": "Open questions", "text": {"status": "generated", "div": "<div>" + "".join(f"<p>{_esc(q)}</p>" for q in open_q) + "</div>"}},
+         "text": {"status": "generated", "div": _div("".join(f"<p>{_esc(c['statement'])}</p>" for c in connections))}},
+        {"title": "Open questions", "text": {"status": "generated", "div": _div("".join(f"<p>{_esc(q)}</p>" for q in open_q))}},
     ]
     comp = fhir.create({
         "resourceType": "Composition", **({"id": composition_id} if composition_id else {}), "status": "final", "title": "Pre-visit brief",
@@ -77,6 +79,10 @@ def generate(db: Session, fhir: FhirStore, s: IntakeSession, qr_ref: str, gatewa
                       {"url": EXT_APPOINTMENT, "valueString": f"Appointment/{s.appointment_id}"}],
     })
     return comp, ctx.profile_refs
+
+
+def _div(inner: str) -> str:
+    return f'<div xmlns="http://www.w3.org/1999/xhtml">{inner or "<p>None</p>"}</div>'
 
 
 def _esc(t: str) -> str:
@@ -181,6 +187,14 @@ def lifestyle_section(fhir: FhirStore, patient_id: str, category: str) -> tuple[
     return facts, gaps
 
 
+def follow_up_view(t: dict | None) -> dict | None:
+    if not t:
+        return None
+    return {"since": t["since"], "split": t["summary"]["split"], "splitLabel": t["summary"]["splitLabel"],
+            "series": t["series"], "events": t["events"], "listRef": t["refs"]["list"],
+            "notes": t["summary"]["notes"][-5:]}
+
+
 def find_session_for_brief(db: Session, brief_id: str) -> IntakeSession | None:
     return db.scalars(select(IntakeSession).where(IntakeSession.brief_id == brief_id)).first()
 
@@ -205,6 +219,17 @@ def read_brief(db: Session, fhir: FhirStore, patient_id: str, brief_id: str) -> 
                 q = f"{m['name']} (patient-reported, another provider): indication not given."
                 if q not in open_q:
                     open_q.insert(0, q)
+    t = trends_service.build(fhir, patient_id)
+    trend_facts = [f for x in trends_service.trend_facts(t) if (f := _fact(fhir, x["text"], x["refs"]))] if t else []
+    reported = []
+    for r in fhir.search("MedicationStatement", patient=f"Patient/{patient_id}"):
+        mv = med_view(r)
+        reported.append({"name": mv["name"], "dose": " ".join(x for x in (mv["dose"], mv["frequency"]) if x),
+                         "reason": mv["reason"], "reference": ref_of(r), "source": source_of(r),
+                         "status": "current" if mv["status"] == "active" else "past"})
+    qr_ref = (cc.get("refs") or [None])[0]
+    consistency = [f for x in trends_service.consistency_facts(t, p.get("answers_by_slot", {}), qr_ref, reported)
+                   if (f := _fact(fhir, x["text"], x["refs"]))]
     review = db.scalars(select(BriefReview).where(BriefReview.brief_id == brief_id).order_by(BriefReview.at.desc())).first()
     reviewer = db.get(User, review.doctor_id) if review else None
     return {
@@ -220,6 +245,9 @@ def read_brief(db: Session, fhir: FhirStore, patient_id: str, brief_id: str) -> 
         "relevantHistory": history,
         "lifestyle": life,
         "openQuestions": open_q,
+        "trends": trend_facts,
+        "consistency": consistency,
+        "followUp": follow_up_view(t),
         "reviewed": {"by": reviewer.display_name, "at": review.at.isoformat()} if review else None,
         "generation": {**p.get("generation", {}), "hidden_unresolved": len(p.get("connections", [])) - len(history)},
     }
@@ -240,6 +268,12 @@ def brief_as_text(b: dict, patient_name: str) -> str:
     lines += [f"- {f['text']} [{', '.join(c['reference'] for c in f['citations'])}]" for f in b["relevantHistory"]]
     lines.append("Relevant lifestyle:")
     lines += [f"- {f['text']} (updated {f['updatedAt']})" for f in b["lifestyle"]]
+    if b.get("trends"):
+        lines.append("Since last visit (daily check-ins and wearable):")
+        lines += [f"- {f['text']}" for f in b["trends"]]
+    if b.get("consistency"):
+        lines.append("Consistency check (where sources differ):")
+        lines += [f"- {f['text']}" for f in b["consistency"]]
     lines.append("Open questions:")
     lines += [f"- {q}" for q in b["openQuestions"]]
     lines.append(f"Generated {today().isoformat()} by VitalContext: organises information only, no diagnoses, risk scores or suggested actions.")

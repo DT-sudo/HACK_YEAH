@@ -1,0 +1,125 @@
+# Snapshot of public product information from the Polish registry of medicinal products
+# (Rejestr Produktów Leczniczych, URPL, https://rejestrymedyczne.ezdrowie.gov.pl).
+# SIMULATED FOR THE DEMO: values follow the structure of SmPC (ChPL) section 4.8 "Undesirable effects"
+# but are abridged excerpts, not a copy of the official documents. A production build would sync this
+# from the registry's public data and keep the registry id and version for every fact.
+#
+# match:   lowercase substrings of the medicine name or ATC code
+# effects: SmPC term, frequency group, and plain-language aliases used to match what patients say
+source:
+  name: Rejestr Produktów Leczniczych (URPL)
+  url: https://rejestrymedyczne.ezdrowie.gov.pl/rpl/search/public
+  snapshot: "2026-09-30"
+  simulated: true
+
+products:
+  - id: urpl-methylphenidate
+    substance: methylphenidate
+    match: [methylphenidate, metylofenidat, concerta, medikinet, "n06ba04"]
+    atc: N06BA04
+    class: central nervous system stimulant
+    registry_id: "RPL-0000001 (demo)"
+    effects:
+      - { term: decreased appetite, freq: very common, aliases: [appetite, apetyt] }
+      - { term: insomnia, freq: very common, aliases: [falling asleep, trouble sleeping, zasypia] }
+      - { term: headache, freq: very common, aliases: [headache, bol glowy] }
+      - { term: palpitations, freq: common, aliases: [racing heart, kolatanie] }
+      - { term: tachycardia, freq: common, aliases: [racing heart] }
+      - { term: irritability, freq: common, aliases: [irritab, drazliw] }
+      - { term: dry mouth, freq: common, aliases: [dry mouth, sucho w ustach] }
+    lab_watch: []
+  - id: urpl-melatonin
+    substance: melatonin
+    match: [melatonin]
+    atc: N05CH01
+    class: melatonin receptor agonist
+    registry_id: "RPL-0000002 (demo)"
+    effects:
+      - { term: headache, freq: uncommon, aliases: [headache] }
+      - { term: somnolence, freq: uncommon, aliases: [sleepy, drowsy] }
+  - id: urpl-lisinopril
+    substance: lisinopril
+    match: [lisinopril, enalapril, ramipril, perindopril, "c09aa"]
+    atc: C09AA03
+    class: ACE inhibitor
+    registry_id: "RPL-0000003 (demo)"
+    effects:
+      - { term: dry cough, freq: common, aliases: [] }
+      - { term: dizziness, freq: common, aliases: [dizzy, zawroty] }
+      - { term: headache, freq: common, aliases: [] }
+  - id: urpl-atorvastatin
+    substance: atorvastatin
+    match: [atorvastatin, simvastatin, rosuvastatin, "c10aa"]
+    atc: C10AA05
+    class: statin
+    registry_id: "RPL-0000004 (demo)"
+    effects:
+      - { term: muscle pain, freq: common, aliases: [] }
+      - { term: headache, freq: common, aliases: [] }
+      - { term: nausea, freq: common, aliases: [] }
+  - id: urpl-ibuprofen
+    substance: ibuprofen
+    match: [ibuprofen, naproxen, diclofenac, ketoprofen, "m01ae"]
+    atc: M01AE01
+    class: NSAID
+    registry_id: "RPL-0000005 (demo)"
+    effects:
+      - { term: heartburn, freq: common, aliases: [] }
+      - { term: stomach pain, freq: common, aliases: [] }
+      - { term: nausea, freq: common, aliases: [] }
+    lab_watch: [creatinine]
+  - id: urpl-omeprazole
+    substance: omeprazole
+    match: [omeprazole, pantoprazole, esomeprazole, "a02bc"]
+    atc: A02BC01
+    class: proton pump inhibitor
+    registry_id: "RPL-0000006 (demo)"
+    used_for: [heartburn]
+    effects:
+      - { term: headache, freq: common, aliases: [] }
+      - { term: stomach pain, freq: common, aliases: [] }
+  - id: urpl-amoxicillin
+    substance: amoxicillin
+    match: [amoxicillin, "j01ca"]
+    atc: J01CA04
+    class: penicillin antibiotic
+    registry_id: "RPL-0000007 (demo)"
+    effects:
+      - { term: diarrhoea, freq: common, aliases: [] }
+      - { term: rash, freq: common, aliases: [] }
+  - id: urpl-bisoprolol
+    substance: bisoprolol
+    match: [metoprolol, bisoprolol, "c07ab"]
+    atc: C07AB07
+    class: beta blocker
+    registry_id: "RPL-0000008 (demo)"
+    effects:
+      - { term: tiredness, freq: common, aliases: [] }
+      - { term: cold hands, freq: common, aliases: [] }
+  - id: urpl-amlodipine
+    substance: amlodipine
+    match: [amlodipine, "c08ca"]
+    atc: C08CA01
+    class: calcium channel blocker
+    registry_id: "RPL-0000009 (demo)"
+    effects:
+      - { term: ankle swelling, freq: very common, aliases: [] }
+      - { term: headache, freq: common, aliases: [] }
+  - id: urpl-metformin
+    substance: metformin
+    match: [metformin, "a10ba"]
+    atc: A10BA02
+    class: biguanide
+    registry_id: "RPL-0000010 (demo)"
+    effects:
+      - { term: nausea, freq: very common, aliases: [] }
+      - { term: diarrhoea, freq: very common, aliases: [] }
+  - id: urpl-apixaban
+    substance: apixaban
+    match: [apixaban, "b01af"]
+    atc: B01AF02
+    class: anticoagulant
+    registry_id: "RPL-0000011 (demo)"
+    effects:
+      - { term: bleeding, freq: common, aliases: [] }
+      - { term: anaemia, freq: common, aliases: [] }

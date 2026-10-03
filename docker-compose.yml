@@ -1,35 +1,52 @@
-# Production-like topology from ARCHITECTURE.md: only `web` and `api` are exposed; FHIR, Postgres and
-# Redis sit on an internal network. For the quick demo you don't need this: see README (local run).
-services:
-  api:
-    build: ./backend
-    environment:
-      VC_DATABASE_URL: postgresql+psycopg://vitalcontext:vitalcontext@postgres:5432/vitalcontext
-      VC_FHIR_BACKEND: hapi
-      VC_FHIR_BASE_URL: http://hapi-fhir:8080/fhir
-      VC_REDIS_URL: redis://redis:6379/0
-      VC_JWT_SECRET: ${VC_JWT_SECRET:-change-me-in-production-please-long-random}
-      VC_CORS_ORIGINS: http://localhost:3000
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    ports: ["8000:8000"]
-    depends_on:
-      postgres: { condition: service_healthy }
-      hapi-fhir: { condition: service_started }
-      redis: { condition: service_started }
-    networks: [internal, edge]
-    restart: on-failure
+# One command: `docker compose up`  →  app on http://localhost:3000, API on http://localhost:8000
+#
+# Only `web` and `api` publish ports; PostgreSQL and Redis sit on an internal network. The API seeds
+# the synthetic demo data on start and keeps FHIR resources in its built-in FHIR store.
+# To run a separate HAPI FHIR server as in ARCHITECTURE.md, add the override file:
+#   docker compose -f docker-compose.yml -f docker-compose.hapi.yml up --build
+# No real patient data is ever used.
+#
+# Optional: put ANTHROPIC_API_KEY in a .env file next to this one to use Claude instead of the
+# offline rule engine.
+name: vitalcontext
 
+services:
   web:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_API_URL: http://localhost:8000  # the browser calls the API through the published port
     ports: ["3000:3000"]
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
     networks: [edge]
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    environment:
+      VC_DATABASE_URL: postgresql+psycopg://vitalcontext:vitalcontext@postgres:5432/vitalcontext
+      VC_FHIR_BACKEND: local
+      VC_REDIS_URL: redis://redis:6379/0
+      VC_JWT_SECRET: ${VC_JWT_SECRET:-demo-only-secret-change-me-for-anything-real}
+      VC_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      VC_LLM_PROVIDER: ${VC_LLM_PROVIDER:-auto}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 300s  # generous: covers HAPI's first boot when the override file is used
+    networks: [internal, edge]
+    restart: unless-stopped
 
   postgres:
-    image: postgres:17
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: vitalcontext
       POSTGRES_PASSWORD: vitalcontext
@@ -40,25 +57,21 @@ services:
       retries: 20
     volumes: [pgdata:/var/lib/postgresql/data]
     networks: [internal]
-
-  hapi-fhir:
-    image: hapiproject/hapi:latest
-    environment:
-      hapi.fhir.fhir_version: R4
-      hapi.fhir.client_id_strategy: ANY
-      hapi.fhir.allow_external_references: "true"
-    volumes: [hapidata:/data/hapi]
-    networks: [internal]
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
     networks: [internal]
+    restart: unless-stopped
 
 networks:
   internal:
-    internal: true
+    internal: true  # Postgres, Redis (and HAPI, if enabled) are not reachable from outside
   edge: {}
 
 volumes:
   pgdata: {}
-  hapidata: {}

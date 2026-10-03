@@ -1,6 +1,6 @@
 """Synthetic demo data (Synthea-style FHIR R4 resources). No real patient data, including the team's own.
 
-Clinic: Przychodnia Rodzinna Kazimierz, Kraków. Demo day: Monday 5 October 2026.
+Clinic: Centrum Medyczne Kazimierz, Kraków (GP + psychiatry). Demo day: Monday 5 October 2026.
 Each patient also has records that are irrelevant to the complaint, so the relevance filter has
 something to leave out (data minimisation is visible in the brief footer).
 """
@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 from app.db.models import CareAssignment, IntakeSession, UrgentFlag, User
 from app.fhir.client import FhirStore
 from app.fhir.describe import EXT_OUTCOME, WEARABLE_SYSTEM
+from app.fhir.seed_adhd import seed_adhd
 from app.llm.gateway import LLMGateway
+from app.services.knowledge import registry_documents
 from app.services import brief as brief_service, profile
 from app.services.profile import lifestyle_observation, medication_statement
 
-CLINIC = "Przychodnia Rodzinna Kazimierz"
+CLINIC = "Centrum Medyczne Kazimierz"
 ATC = "http://www.whocc.no/atc"
 ICD10 = "http://hl7.org/fhir/sid/icd-10"
 LOINC = "http://loinc.org"
@@ -82,7 +84,7 @@ def encounter(rid, pid, when, reason, outcome, who="Dr. Ewa Wiśniewska"):
 
 def docref(rid, pid, when, title, description, author):
     return {"resourceType": "DocumentReference", "id": rid, "status": "current", "subject": _subj(pid),
-            "type": {"text": title}, "date": when, "description": description, "author": [{"display": author}],
+            "type": {"text": title}, "date": f"{when}T12:00:00+01:00",  # DocumentReference.date is an instant "description": description, "author": [{"display": author}],
             "content": [{"attachment": {"contentType": "text/plain", "title": title}}]}
 
 
@@ -270,9 +272,14 @@ def seed(db: Session, fhir: FhirStore) -> None:
         doctor_name, prid = next((n, p) for l, n, p in DOCTORS if l == doc)
         fhir.create(appointment(f"apt-{pid}", pid, f"{given} {family}", f"Practitioner/{prid}", doctor_name, time_))
         db.add(User(id=login, role="patient", display_name=f"{given} {family}", fhir_ref=f"Patient/{pid}", demo_hint=hint))
-        db.add(CareAssignment(doctor_id=doc, patient_id=pid))
+    db.flush()  # users must exist before care assignments reference them (enforced by PostgreSQL)
+    for login, *_rest, doc, _time, _hint in PATIENTS:
+        db.add(CareAssignment(doctor_id=doc, patient_id=PID[login]))
     for r in clinical_records():
         fhir.create(r)
+    for doc in registry_documents():  # public reference data (simulated URPL snapshot)
+        fhir.create(doc)
+    seed_adhd(db, fhir, appointment)
     db.commit()
 
     # Piotr: confirmed voice intake + brief generated through the real pipeline.
@@ -290,7 +297,7 @@ def seed(db: Session, fhir: FhirStore) -> None:
                                      "valueString": "AI-guided chat, voice"}]})
     # Seeded briefs always use the deterministic provider, so the demo starts identical every time.
     comp, refs = brief_service.generate(db, fhir, sp, f"QuestionnaireResponse/{qr['id']}", gateway=LLMGateway(provider="mock"),
-                                        composition_id="brief-p-1005", created="2026-10-04T19:13:00")
+                                        composition_id="brief-p-1005", created="2026-10-04T19:13:00+02:00")
     profile.mark_documented(fhir, refs)
     sp.questionnaire_response_id, sp.brief_id, sp.state = qr["id"], comp["id"], "SUBMITTED"
 

@@ -33,7 +33,7 @@ export function SourceDrawer({ pid, reference, onClose }: { pid: string; referen
       <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-t">
         <div className="drawer-head">
           <div style={{ display: "grid", gap: 4 }}>
-            {rec && <span className="src"><SourceMark source={rec.source} /> {rec.source === "clinic" ? t("source.clinic") : t("source.patient")} · {rec.type}</span>}
+            {rec && <span className="src"><SourceMark source={rec.source} /> {rec.source === "clinic" ? t("source.clinic") : rec.source === "registry" ? t("source.registry") : t("source.patient")} · {rec.type}</span>}
             <h2 id="dr-t">{rec?.title ?? reference}</h2>
             {rec?.date && <span className="small num">{fmtDate(rec.date, lang)}{rec.version ? ` · ${t("drawer.version", { v: rec.version })}` : ""}</span>}
           </div>
@@ -44,7 +44,7 @@ export function SourceDrawer({ pid, reference, onClose }: { pid: string; referen
           {!rec && !error && <p className="small">{t("common.loading")}</p>}
           {rec && (
             <>
-              {rec.verified && <div className="verified"><Check size={16} aria-hidden /> {t("drawer.verified")}</div>}
+              {rec.verified && <div className="verified"><Check size={16} aria-hidden /> {rec.source === "registry" ? t("drawer.verifiedRegistry") : t("drawer.verified")}</div>}
               <dl className="kv">{rec.fields.map(([k, v]) => <div key={k} style={{ display: "contents" }}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
               <details>
                 <summary>{t("drawer.raw", { ref: rec.reference })}</summary>

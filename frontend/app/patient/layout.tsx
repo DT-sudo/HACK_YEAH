@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, House, User } from "lucide-react";
+import { CalendarDays, ClipboardCheck, House, User } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { PatientProvider, usePatient } from "@/lib/patient-context";
 
@@ -10,10 +10,12 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
   const { t } = useApp();
   const { me, intake, step, localEmergency } = usePatient();
   const path = usePathname();
-  const tab = path.startsWith("/patient/profile") ? "profile" : path.startsWith("/patient/appointments") ? "appts" : "home";
+  const tab = path.startsWith("/patient/profile") ? "profile" : path.startsWith("/patient/appointments") ? "appts"
+    : path.startsWith("/patient/daily") ? "daily" : "home";
   const emergency = localEmergency || intake?.state === "EMERGENCY";
   const inChat = intake && ["STARTED", "COLLECTING", "COMPLETED"].includes(intake.state) && step === "chat";
-  const title = tab === "profile" ? t("p.title.profile") : tab === "appts" ? t("p.title.appts") : inChat ? t("p.title.chat") : t("p.title.visit");
+  const title = tab === "profile" ? t("p.title.profile") : tab === "appts" ? t("p.title.appts") : tab === "daily" ? t("p.title.daily")
+    : inChat ? t("p.title.chat") : t("p.title.visit");
   const progress = emergency || intake?.state === "SUBMITTED" ? 1 : step === "summary" ? 0.9 : intake?.progress ?? 0.05;
 
   return (
@@ -32,6 +34,7 @@ function PhoneFrame({ children }: { children: React.ReactNode }) {
       {!(emergency && tab === "home") && (
         <nav className="ptabs" aria-label={t("p.sections")}>
           <Link href="/patient" aria-current={tab === "home" ? "page" : undefined}><House size={22} aria-hidden /><span>{t("p.tab.home")}</span></Link>
+          <Link href="/patient/daily" aria-current={tab === "daily" ? "page" : undefined}><ClipboardCheck size={22} aria-hidden /><span>{t("p.tab.daily")}</span></Link>
           <Link href="/patient/appointments" aria-current={tab === "appts" ? "page" : undefined}><CalendarDays size={22} aria-hidden /><span>{t("p.tab.appts")}</span></Link>
           <Link href="/patient/profile" aria-current={tab === "profile" ? "page" : undefined}><User size={22} aria-hidden /><span>{t("p.tab.profile")}</span></Link>
         </nav>

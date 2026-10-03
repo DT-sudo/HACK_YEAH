@@ -1,0 +1,73 @@
+# Daily check-in questionnaires (fixed, deterministic; no AI involved). A clinician enables one for a
+# patient with a FHIR CarePlan; every answer set is stored as a QuestionnaireResponse.
+# Free text goes through the same red-flag safety net as the intake chat.
+questionnaires:
+  vc-daily-adhd-v1:
+    title: { en: "Daily check-in", pl: "Codzienny wpis" }
+    intro:
+      en: "About a minute. Your answers build the 'since last visit' picture your doctor sees."
+      pl: "Około minuty. Twoje odpowiedzi tworzą obraz „od ostatniej wizyty”, który widzi lekarz."
+    items:
+      - id: med_taken
+        type: single
+        text: { en: "Did you take your medicine today?", pl: "Czy wziąłeś(-ęłaś) dziś lek?" }
+        options:
+          - { value: on_time, en: "Yes, at the usual time", pl: "Tak, o zwykłej porze" }
+          - { value: late, en: "Yes, later than usual", pl: "Tak, później niż zwykle" }
+          - { value: missed, en: "No", pl: "Nie" }
+      - id: focus
+        type: scale
+        text: { en: "How well could you focus today, from 0 (not at all) to 10 (very well)?",
+                pl: "Jak dobrze udawało się dziś skupić, od 0 (wcale) do 10 (bardzo dobrze)?" }
+        low: { en: "Not at all", pl: "Wcale" }
+        high: { en: "Very well", pl: "Bardzo dobrze" }
+      - id: focus_lost
+        type: multi
+        text: { en: "When did you lose focus most?", pl: "Kiedy najbardziej traciłeś(-aś) skupienie?" }
+        options:
+          - { value: morning, en: "Morning", pl: "Rano" }
+          - { value: early_afternoon, en: "Early afternoon", pl: "Wczesne popołudnie" }
+          - { value: late_afternoon, en: "Late afternoon", pl: "Późne popołudnie" }
+          - { value: evening, en: "Evening", pl: "Wieczór" }
+          - { value: none, en: "I didn't really", pl: "Właściwie nie traciłem(-am)", exclusive: true }
+      - id: triggers
+        type: multi
+        text: { en: "What pulled you off track?", pl: "Co Cię rozpraszało?" }
+        options:
+          - { value: phone, en: "Phone or notifications", pl: "Telefon lub powiadomienia" }
+          - { value: noise, en: "Noise or open office", pl: "Hałas lub open space" }
+          - { value: meetings, en: "Long meetings", pl: "Długie spotkania" }
+          - { value: poor_sleep, en: "Tiredness after poor sleep", pl: "Zmęczenie po słabym śnie" }
+          - { value: hunger, en: "Hunger", pl: "Głód" }
+          - { value: none, en: "Nothing in particular", pl: "Nic szczególnego", exclusive: true }
+      - id: sleep
+        type: single
+        text: { en: "How long did you sleep last night?", pl: "Ile spałeś(-aś) ostatniej nocy?" }
+        options:
+          - { value: "4.5", en: "Less than 5 hours", pl: "Mniej niż 5 godzin" }
+          - { value: "5.5", en: "5–6 hours", pl: "5–6 godzin" }
+          - { value: "6.5", en: "6–7 hours", pl: "6–7 godzin" }
+          - { value: "7.5", en: "7–8 hours", pl: "7–8 godzin" }
+          - { value: "8.5", en: "More than 8 hours", pl: "Ponad 8 godzin" }
+      - id: appetite
+        type: single
+        text: { en: "How was your appetite?", pl: "Jak był z apetytem?" }
+        options:
+          - { value: normal, en: "Normal", pl: "Normalnie" }
+          - { value: lower, en: "A bit lower", pl: "Trochę mniejszy" }
+          - { value: skipped, en: "I skipped a meal", pl: "Pominąłem(-ęłam) posiłek" }
+      - id: side_effects
+        type: multi
+        text: { en: "Did you notice any of these today?", pl: "Czy zauważyłeś(-aś) dziś coś z poniższych?" }
+        options:
+          - { value: insomnia, en: "Trouble falling asleep", pl: "Trudności z zaśnięciem" }
+          - { value: racing_heart, en: "Racing heart", pl: "Kołatanie serca" }
+          - { value: headache, en: "Headache", pl: "Ból głowy" }
+          - { value: irritability, en: "Irritability", pl: "Drażliwość" }
+          - { value: dry_mouth, en: "Dry mouth", pl: "Suchość w ustach" }
+          - { value: none, en: "None of these", pl: "Nic z tych rzeczy", exclusive: true }
+      - id: note
+        type: free
+        optional: true
+        text: { en: "Anything else your doctor should know? (optional)",
+                pl: "Coś jeszcze, o czym lekarz powinien wiedzieć? (opcjonalnie)" }

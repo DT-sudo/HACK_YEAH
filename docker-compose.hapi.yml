@@ -1,0 +1,20 @@
+# Optional: run a separate HAPI FHIR server (the ARCHITECTURE.md topology).
+#   docker compose -f docker-compose.yml -f docker-compose.hapi.yml up --build
+# The image is large (~450 MB) and HAPI needs 1-2 minutes to boot; the API waits for it before seeding.
+services:
+  api:
+    environment:
+      VC_FHIR_BACKEND: hapi
+      VC_FHIR_BASE_URL: http://hapi-fhir:8080/fhir
+    depends_on:
+      hapi-fhir: { condition: service_started }
+
+  hapi-fhir:
+    image: hapiproject/hapi:v8.12.0-2
+    environment:
+      hapi.fhir.fhir_version: R4
+      hapi.fhir.client_id_strategy: ANY
+      hapi.fhir.enforce_referential_integrity_on_write: "false"
+      hapi.fhir.enforce_referential_integrity_on_delete: "false"
+    networks: [internal]
+    restart: unless-stopped

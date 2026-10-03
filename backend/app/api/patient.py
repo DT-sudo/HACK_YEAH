@@ -11,7 +11,9 @@ from app.db.models import IntakeSession, UrgentFlag, User
 from app.db.session import get_db
 from app.fhir.client import FhirStore
 from app.fhir.seed import CLINIC
-from app.services import audit, intake, profile, session_cache
+from app.services import audit, brief as brief_service, checkins, intake, profile, session_cache, trends
+from app.services.checkins import CheckinError
+from app.settings import today
 from app.services.intake import IntakeError
 from app.services.profile import ProfileError
 
@@ -210,3 +212,31 @@ def discard_draft(sid: str, user: User = Depends(patient_user), db: Session = De
     db.commit()
     audit.record(db, user.id, "patient", "intake.discard", patient_id_of(user), f"IntakeSession/{sid}")
     return Response(status_code=204)
+
+
+# ---- daily check-ins -----------------------------------------------------------------------------
+def _checkin_state(fhir: FhirStore, pid: str, lang: str, emergency: str | None = None) -> M.CheckinStateOut:
+    plan = checkins.active_plan(fhir, pid)
+    if not plan:
+        return M.CheckinStateOut(enabled=False, today=today().isoformat())
+    t = trends.build(fhir, pid)
+    done = any(p["date"] == today().isoformat() and p["ref"] for p in (t or {}).get("series", []))
+    return M.CheckinStateOut(enabled=True, planTitle=plan.get("title"), since=(plan.get("period") or {}).get("start"),
+                             today=today().isoformat(), todayDone=done,
+                             questionnaire=checkins.definition(checkins.plan_questionnaire(plan), lang),
+                             followUp=brief_service.follow_up_view(t), emergency=emergency)
+
+
+@router.get("/checkins", response_model=M.CheckinStateOut)
+def get_checkins(lang: str = "en", user: User = Depends(patient_user), fhir: FhirStore = Depends(fhir_dep)):
+    return _checkin_state(fhir, patient_id_of(user), "pl" if lang == "pl" else "en")
+
+
+@router.post("/checkins", response_model=M.CheckinStateOut)
+def post_checkin(body: M.CheckinIn, user: User = Depends(patient_user), db: Session = Depends(get_db),
+                 fhir: FhirStore = Depends(fhir_dep)):
+    try:
+        res = checkins.submit(db, fhir, user, patient_id_of(user), body.answers, body.lang)
+    except CheckinError as e:
+        raise HTTPException(e.status, e.message)
+    return _checkin_state(fhir, patient_id_of(user), body.lang, emergency=res["emergency"])

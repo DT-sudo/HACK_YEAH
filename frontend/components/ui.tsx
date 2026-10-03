@@ -15,14 +15,14 @@ export function BrandMark() {
   );
 }
 
-/** Provenance is never shown by colour alone: clinic = filled square, patient = ring. */
+/** Provenance is never shown by colour alone: clinic = filled square, patient = ring, public registry = diamond. */
 export function SourceMark({ source }: { source: Source }) {
   return <span className={`mark ${source}`} aria-hidden="true" />;
 }
 
 export function CitationChip({ c, onOpen }: { c: Citation; onOpen: (ref: string) => void }) {
   const { t } = useApp();
-  const label = c.source === "clinic" ? t("source.clinic") : t("source.patient");
+  const label = c.source === "clinic" ? t("source.clinic") : c.source === "registry" ? t("source.registry") : t("source.patient");
   return (
     <button className={`cite ${c.source}`} onClick={() => onOpen(c.reference)} title={c.reference}
             aria-label={t("brief.cite.aria", { source: label, ref: c.reference })}>
@@ -32,13 +32,13 @@ export function CitationChip({ c, onOpen }: { c: Citation; onOpen: (ref: string)
 }
 
 export function Fact({ fact, onOpen, when }: { fact: FactT; onOpen: (ref: string) => void; when?: React.ReactNode }) {
-  const mixed = fact.sources.length > 1;
-  const cls = mixed ? "mixed" : fact.sources[0] ?? "clinic";
+  const order: Source[] = ["clinic", "patient", "registry"];
+  const srcs = order.filter((s) => fact.sources.includes(s));
+  const mixed = srcs.includes("clinic") && srcs.includes("patient");
+  const cls = mixed ? "mixed" : srcs.length === 1 ? srcs[0] : srcs.includes("patient") ? "patient" : "clinic";
   return (
     <div className={`fact ${cls}`}>
-      {mixed ? (
-        <span style={{ display: "inline-flex", gap: 3 }}><SourceMark source="clinic" /><SourceMark source="patient" /></span>
-      ) : <SourceMark source={(fact.sources[0] ?? "clinic") as Source} />}
+      <span style={{ display: "inline-flex", gap: 3 }}>{(srcs.length ? srcs : ["clinic" as Source]).map((s) => <SourceMark key={s} source={s} />)}</span>
       <div>{fact.text}</div>
       <span className="when">{when}</span>
       <div className="cites">{fact.citations.map((c) => <CitationChip key={c.reference} c={c} onOpen={onOpen} />)}</div>

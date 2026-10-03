@@ -34,6 +34,16 @@ categories:
     lab_loinc: []
     lifestyle: [alcohol, diet]
     wearable: false
+  adhd_followup:
+    keywords: [adhd, focus, concentrat, attention, koncentr, skupi, uwag, rozkojarz]
+    symptoms: [decreased appetite, insomnia, palpitations, headache, irritability]
+    encounter_keywords: [adhd, attention, concentrat, psychiatr, koncentr]
+    document_keywords: [ecg, ekg]
+    lab_loinc: []
+    vitals: true
+    checkins: true
+    lifestyle: [sleep, substances, occupation, alcohol]
+    wearable: true
   general:
     keywords: []
     symptoms: [tiredness]

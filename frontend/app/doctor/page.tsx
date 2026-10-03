@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { BriefView } from "@/components/doctor/BriefView";
 import { SourceDrawer } from "@/components/doctor/SourceDrawer";
-import { StatusPill } from "@/components/ui";
+import { TrendChart } from "@/components/TrendChart";
+import { Fact, StatusPill } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
 import { fmtLongDay, fmtTime } from "@/lib/format";
 import type { Day, DayPatient } from "@/types/api";
+import type { Fact as FactT, FollowUp } from "@/types/brief";
 
 function BreakGlass({ onGranted }: { onGranted: (p: DayPatient) => void }) {
   const { t, toast } = useApp();
@@ -75,18 +77,34 @@ function UrgentView({ p, onChanged }: { p: DayPatient; onChanged: () => void }) 
   );
 }
 
-function EmptyView({ p }: { p: DayPatient }) {
-  const { t } = useApp();
+function EmptyView({ p, onOpen }: { p: DayPatient; onOpen: (ref: string) => void }) {
+  const { t, epoch } = useApp();
+  const [tr, setTr] = useState<{ followUp: FollowUp | null; trends: FactT[] } | null>(null);
+  useEffect(() => {
+    if (!p.checkinDays) return;
+    let cancelled = false;
+    api.trends(p.patientId).then((x) => !cancelled && setTr(x)).catch(() => {});
+    return () => { cancelled = true; };
+  }, [p.patientId, p.checkinDays, epoch]);
   return (
     <section className="brief" aria-label={t("brief.aria")}>
       <div className="brief-head">
-        <div><h1>{p.name}</h1><div className="sub num">{p.age} · {p.sex === "female" ? t("sex.f") : t("sex.m")} · {p.time}</div></div>
+        <div><h1>{p.name}</h1><div className="sub num">{p.age} · {p.sex === "female" ? t("sex.f") : t("sex.m")} · {p.time} · {p.visit}</div></div>
         <StatusPill status={p.status} />
       </div>
       <div className="empty">
         <h2>{p.status === "progress" ? t("empty.progress") : t("empty.none")}</h2>
         <p>{t("empty.body")} {p.status === "none" ? t("empty.reminder") : ""}</p>
       </div>
+      {tr?.followUp && (
+        <div className="sec"><h2>{t("brief.since")}</h2>
+          <div className="body">
+            <span className="small">{t("empty.trendsNote")}</span>
+            <TrendChart data={tr.followUp} />
+            {tr.trends.map((f, i) => <Fact key={i} fact={f} onOpen={onOpen} />)}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -148,7 +166,7 @@ function Dashboard() {
       </nav>
       {p && (p.status === "urgent" && p.urgent ? <UrgentView p={p} onChanged={load} />
         : p.briefId ? <BriefView p={p} onOpen={setDrawer} onChanged={load} fresh={fresh(p)} />
-          : <EmptyView p={p} />)}
+          : <EmptyView p={p} onOpen={setDrawer} />)}
       {drawer && p && <SourceDrawer pid={p.patientId} reference={drawer} onClose={() => setDrawer(null)} />}
     </div>
   );

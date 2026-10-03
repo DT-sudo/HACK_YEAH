@@ -99,6 +99,29 @@ export type DayPatient = {
   briefFresh: boolean;
   urgent: Urgent | null;
   breakGlass: boolean;
+  visit: string;
+  checkinDays: number;
+};
+
+export type CheckinItem = {
+  id: string;
+  type: "single" | "multi" | "scale" | "free";
+  text: string;
+  optional: boolean;
+  low: string | null;
+  high: string | null;
+  options: { value: string; label: string; exclusive: boolean }[];
+};
+
+export type CheckinState = {
+  enabled: boolean;
+  planTitle: string | null;
+  since: string | null;
+  today: string;
+  todayDone: boolean;
+  questionnaire: { id: string; title: string; intro: string; items: CheckinItem[] } | null;
+  followUp: import("@/types/brief").FollowUp | null;
+  emergency: string | null;
 };
 
 export type Day = { date: string; doctor: string; patients: DayPatient[] };

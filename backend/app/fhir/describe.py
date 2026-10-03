@@ -43,9 +43,17 @@ def months_since(d: str | None) -> int | None:
     return (t.year - y) * 12 + (t.month - m) - (1 if t.day < dd else 0)
 
 
+def is_registry(r: dict) -> bool:
+    return any(t.get("code") == "public-registry" for t in (r.get("meta") or {}).get("tag", []))
+
+
 def source_of(r: dict) -> str:
     rt = r.get("resourceType")
+    if is_registry(r):
+        return "registry"
     if rt == "QuestionnaireResponse":
+        return "patient"
+    if rt == "List" and (r.get("source") or {}).get("reference", "").startswith("Patient/"):
         return "patient"
     if rt == "MedicationStatement" and (r.get("informationSource") or {}).get("reference", "").startswith("Patient/"):
         return "patient"
@@ -106,7 +114,9 @@ def title_of(r: dict) -> str:
     if rt == "Observation":
         return (r.get("code") or {}).get("text") or next((c.get("display") for c in codings(r) if c.get("display")), "Observation")
     if rt == "QuestionnaireResponse":
-        return "Pre-visit intake chat"
+        return "Daily check-in" if "vc-daily" in (r.get("questionnaire") or "") else "Pre-visit intake chat"
+    if rt in ("List", "CarePlan"):
+        return r.get("title", rt)
     if rt == "Composition":
         return r.get("title", "Pre-visit brief")
     if rt == "Provenance":
@@ -132,8 +142,10 @@ def date_of(r: dict) -> str | None:
         return r.get("effectiveDateTime") or (r.get("effectivePeriod") or {}).get("end")
     if rt == "QuestionnaireResponse":
         return r.get("authored")
-    if rt in ("Composition",):
+    if rt in ("Composition", "List"):
         return r.get("date")
+    if rt == "CarePlan":
+        return (r.get("period") or {}).get("start")
     return (r.get("meta") or {}).get("lastUpdated")
 
 
@@ -165,7 +177,8 @@ def fields_of(r: dict) -> list[tuple[str, str]]:
         from app.services.knowledge import drug_facts
         facts = drug_facts(m["name"], m["atc"])
         if facts.get("listed_side_effects"):
-            f.append(("Product info", "Lists " + ", ".join(facts["listed_side_effects"]) + " among common adverse reactions"))
+            f.append(("Product info", "URPL registry lists " + ", ".join(facts["listed_side_effects"])
+                      + f" among very common or common undesirable effects ({facts['registry_ref']})"))
     elif rt == "Condition":
         f += [("Code", " ".join(f"{c.get('code')}" for c in codings(r))), ("Clinical status", codings(r, "clinicalStatus")[0]["code"] if codings(r, "clinicalStatus") else ""),
               ("Onset", fmt_date(r.get("onsetDateTime"))), ("Recorded by", (r.get("recorder") or {}).get("display", ""))]
@@ -175,6 +188,11 @@ def fields_of(r: dict) -> list[tuple[str, str]]:
         who = next(((p.get("individual") or {}).get("display") for p in r.get("participant", []) if p.get("individual")), None)
         if who:
             f.append(("Clinician", who))
+    elif rt == "DocumentReference" and is_registry(r):
+        f += [("Source", ", ".join(a.get("display", "") for a in r.get("author", []))),
+              ("Product", ((r.get("context") or {}).get("related") or [{}])[0].get("display", "")),
+              ("Section 4.8", r.get("description", "")), ("Snapshot", fmt_date(r.get("date"))),
+              ("Registry", ((r.get("content") or [{}])[0].get("attachment") or {}).get("url", ""))]
     elif rt == "DocumentReference":
         f += [("Date", fmt_date(r.get("date"))), ("Finding", r.get("description", "")),
               ("Author", ", ".join(a.get("display", "") for a in r.get("author", [])))]
@@ -203,6 +221,17 @@ def fields_of(r: dict) -> list[tuple[str, str]]:
             if interp:
                 f.append(("Interpretation", interp))
             f.append(("Date", fmt_date(r.get("effectiveDateTime"))))
+    elif rt == "List":
+        entries = r.get("entry", [])
+        f += [("Entries", str(len(entries))),
+              ("Period", f"{fmt_date(entries[0]['date'])} – {fmt_date(entries[-1]['date'])}" if entries else "none yet"),
+              ("Reported by", "Patient, daily check-ins")]
+        f += [(fmt_date(e["date"]), e["item"]["reference"]) for e in entries[-7:]]
+    elif rt == "QuestionnaireResponse" and "vc-daily" in (r.get("questionnaire") or ""):
+        f.append(("Date", fmt_date(r.get("authored"))))
+        for it in r.get("item", []):
+            ans = ", ".join(str(a.get("valueString", a.get("valueInteger", ""))) for a in it.get("answer", []))
+            f.append((it.get("text", it["linkId"]), ans))
     elif rt == "QuestionnaireResponse":
         f += [("Completed", fmt_date(r.get("authored"))), ("Confirmed by patient", "Yes")]
         for it in r.get("item", []):

@@ -219,23 +219,54 @@ class MockProvider:
 
         meds = [r for r in recs if r["kind"] in ("clinic_prescription", "reported_medication")
                 and r["details"].get("status") in ("active", "intended")]
+        chk = next((r for r in recs if r["kind"] == "checkins"), None)
+        cd = (chk or {}).get("details", {})
+        n_days = ((cd.get("after") or {}).get("days")) or 0
+        chk_counts = {"appetite": cd.get("appetite_reduced_days", 0), "insomnia": cd.get("side_effect_days", {}).get("insomnia", 0),
+                      "palpitations": cd.get("side_effect_days", {}).get("racing_heart", 0),
+                      "tachycardia": cd.get("side_effect_days", {}).get("racing_heart", 0),
+                      "headache": cd.get("side_effect_days", {}).get("headache", 0),
+                      "irritability": cd.get("side_effect_days", {}).get("irritability", 0),
+                      "dry mouth": cd.get("side_effect_days", {}).get("dry_mouth", 0)}
         for m in meds:
             d = m["details"]
             who = "this clinic" if m["kind"] == "clinic_prescription" else ("another provider" if d.get("from_other_provider") else "patient-reported")
-            for se in d.get("product_info_side_effects", []):
-                if all(w in text for w in norm(se).split()):
-                    start = d.get("start")
-                    weeks = ""
-                    if start:
-                        delta = (date.fromisoformat(pack["today"]) - _partial(start)).days // 7
-                        weeks = f" ({delta} weeks before this visit)" if delta < 52 else ""
-                    src = "" if m["kind"] == "clinic_prescription" else f" ({who})"
-                    conns.append({"statement": f"{m['title']}{src} started {_fmt(start) or 'date not given'}{weeks}. "
-                                               f"Its product information lists {se} as a common side effect. "
-                                               f"Patient reports {se}, onset {onset}.",
-                                  "refs": [m["ref"]] + ([q] if q else [])})
-                    if d.get("reason_ref"):
-                        cited_reasons.add(d["reason_ref"])
+            effects = d.get("registry_effects") or [{"term": t, "freq": "common", "aliases": []} for t in d.get("product_info_side_effects", [])]
+            matched = []
+            for e in effects:
+                if e["freq"] not in ("very common", "common"):
+                    continue
+                in_chat = all(w in text for w in norm(e["term"]).split()) or any(norm(al) in text for al in e.get("aliases", []))
+                key = next((k for k in chk_counts if k in e["term"]), None)
+                days = chk_counts.get(key, 0) if key and chk else 0
+                if (in_chat or days) and not any(x["term"] in ("palpitations", "tachycardia") and e["term"] in ("palpitations", "tachycardia") for x in matched):
+                    matched.append({**e, "in_chat": in_chat, "days": days})
+            if matched:
+                start = d.get("start")
+                weeks = ""
+                if start:
+                    delta = (date.fromisoformat(pack["today"]) - _partial(start)).days // 7
+                    weeks = f" ({delta} weeks before this visit)" if delta < 52 else ""
+                src = "" if m["kind"] == "clinic_prescription" else f" ({who})"
+                if len(matched) == 1:
+                    listed = f"lists {matched[0]['term']} as a {matched[0]['freq']} side effect"
+                else:
+                    parts = [f"{x['term']} ({x['freq']})" for x in matched]
+                    listed = f"lists {', '.join(parts[:-1])} and {parts[-1]} among undesirable effects"
+                reported = []
+                for x in matched:
+                    where = (["pre-visit chat"] if x["in_chat"] else []) + ([f"{x['days']} of {n_days} check-in days"] if x["days"] else [])
+                    reported.append(f"{x['term']} ({'; '.join(where)})" if chk else x["term"])
+                onset_txt = f", onset {onset}" if a.get("onset") else ""
+                refs = [m["ref"]] + ([d["registry_ref"]] if d.get("registry_ref") else [])
+                refs += ([q] if q and any(x["in_chat"] for x in matched) else []) + ([chk["ref"]] if chk and any(x["days"] for x in matched) else [])
+                registry = " (URPL registry)" if d.get("registry_ref") else ""
+                conns.append({"statement": f"{m['title']}{src} started {_fmt(start) or 'date not given'}{weeks}. "
+                                           f"Its product information{registry} {listed}. "
+                                           f"Patient reports {', '.join(reported)}{onset_txt}.",
+                              "refs": refs})
+                if d.get("reason_ref"):
+                    cited_reasons.add(d["reason_ref"])
             for sym in d.get("used_for", []):
                 if all(w in text for w in norm(sym).split()):
                     since = f" since {_fmt(d['start'])}" if d.get("start") else ""
@@ -268,7 +299,11 @@ class MockProvider:
                                                f"{len(s) - 1} weeks (wearable). Patient reports onset {onset}.",
                                   "refs": [r["ref"]] + ([q] if q else [])})
             elif r["kind"] == "encounter":
-                conns.append({"statement": f"Earlier episode: {d['reason']}." + (f" {d['outcome']}." if d.get("outcome") else ""),
+                lead = "Earlier visit" if cat == "adhd_followup" else "Earlier episode"
+                conns.append({"statement": f"{lead}: {d['reason']}." + (f" {d['outcome']}." if d.get("outcome") else ""),
+                              "refs": [r["ref"]]})
+            elif r["kind"] == "vital":
+                conns.append({"statement": f"{d['name']}: {d['value']} {d['unit']} on {_fmt(r['date'])} (most recent on record).",
                               "refs": [r["ref"]]})
             elif r["kind"] == "document":
                 conns.append({"statement": f"{d['type']}: {d['finding']}", "refs": [r["ref"]]})
@@ -285,13 +320,37 @@ class MockProvider:
                 openq.append(f"Breathlessness reported ({_lc(a['sob'])}); timing relative to the cough not established.")
         if cat == "musculoskeletal":
             openq.append("Footwear, running surface or training plan not covered in the intake.")
+        if cat == "adhd_followup":
+            wo = a.get("wear_off", "")
+            if wo in ("Before lunch", "Early afternoon", "Late afternoon"):
+                openq.append(f"Effect reported to fade {_lc(wo)}; time of the morning dose not covered in the intake.")
+            if a.get("caffeine") == "More than before":
+                openq.append("Caffeine intake reported as higher than before; amount and timing not covered.")
+            if a.get("mood") in ("Mostly low", "Anxious or on edge", "Up and down"):
+                openq.append(f"Mood most days reported as \"{_lc(a['mood'])}\"; not explored further in the intake.")
+            if "appetite" in text or cd.get("appetite_reduced_days"):
+                openq.append("Body weight since the dose change not recorded.")
+            if a.get("wishes"):
+                openq.append(f"Patient would like to discuss: \"{a['wishes']}\"")
         if a.get("changes") == "Started a new medicine":
             openq.append("Patient reports starting a new medicine before onset but did not name it in the chat.")
 
-        return {"chief_complaint": self._chief(cat, a), "connections": conns, "open_questions": openq}
+        return {"chief_complaint": self._chief(cat, a, cd), "connections": conns, "open_questions": openq}
 
     @staticmethod
-    def _chief(cat: str, a: dict[str, str]) -> str:
+    def _chief(cat: str, a: dict[str, str], checkins: dict | None = None) -> str:
+        if cat == "adhd_followup":
+            c = checkins or {}
+            head = (f"ADHD follow-up after the change to {c['split_label']} on {_fmt(c['split_date'])}" if c.get("split_label")
+                    else "ADHD follow-up")
+            parts = []
+            if a.get("overall"):
+                parts.append(f"overall {_lc(a['overall'])}")
+            if a.get("wear_off"):
+                parts.append(f"effect fades: {_lc(a['wear_off'])}")
+            if a.get("work_impact"):
+                parts.append(f"impact on work/study {a['work_impact']}/10")
+            return head + (". " + "; ".join(parts)[:1].upper() + "; ".join(parts)[1:] + "." if parts else ".")
         sev = f" Impact {a['severity']}/10." if "severity" in a else ""
         onset = f"onset {_lc(a['onset'])}" if "onset" in a else "onset not stated"
         if cat == "respiratory":

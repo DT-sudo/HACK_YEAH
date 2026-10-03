@@ -14,7 +14,8 @@ from app.db.models import AuditLog, BriefReview, CareAssignment, IntakeSession, 
 from app.db.session import get_db
 from app.fhir.client import FhirStore
 from app.fhir.describe import date_of, fields_of, source_of, title_of
-from app.services import audit, brief as brief_service, intake, safety
+from app.services import audit, brief as brief_service, checkins, intake, safety, trends
+from app.fhir.describe import is_registry
 from app.services.context import age_of
 from app.settings import get_settings, iso_now, now, today
 
@@ -44,7 +45,8 @@ def _day_entry(db: Session, fhir: FhirStore, a: CareAssignment) -> M.DayPatientO
         briefCreatedAt=created, briefFresh=fresh,
         urgent=M.UrgentOut(ruleId=flag.rule_id, trigger=flag.trigger_text, at=flag.created_at.isoformat(),
                            contactedBy=contacted_by, contactedAt=flag.contacted_at.isoformat() if flag.contacted_at else None) if flag else None,
-        breakGlass=a.break_glass,
+        breakGlass=a.break_glass, visit=appt.service,
+        checkinDays=len(checkins.list_checkins(fhir, pid)) if checkins.active_plan(fhir, pid) else 0,
     )
 
 
@@ -84,6 +86,16 @@ def brief_text(bid: str, pid: str = Depends(assigned_patient), user: User = Depe
     return brief_service.brief_as_text(b, f"{p['name'][0]['given'][0]} {p['name'][0]['family']}")
 
 
+@router.get("/patients/{pid}/trends", response_model=M.TrendsOut)
+def get_trends(pid: str = Depends(assigned_patient), user: User = Depends(doctor_user), db: Session = Depends(get_db),
+               fhir: FhirStore = Depends(fhir_dep)):
+    """Since-last-visit series, available even before the patient has done the pre-visit chat."""
+    t = trends.build(fhir, pid)
+    audit.record(db, user.id, "doctor", "trends.read", pid)
+    facts = [f for x in trends.trend_facts(t) if (f := brief_service._fact(fhir, x["text"], x["refs"]))] if t else []
+    return M.TrendsOut(followUp=brief_service.follow_up_view(t), trends=facts)
+
+
 @router.post("/patients/{pid}/briefs/{bid}/review", response_model=M.ReviewOut)
 def review(bid: str, pid: str = Depends(assigned_patient), user: User = Depends(doctor_user), db: Session = Depends(get_db),
            fhir: FhirStore = Depends(fhir_dep)):
@@ -105,7 +117,7 @@ def source(ref: str, pid: str = Depends(assigned_patient), user: User = Depends(
     rt, rid = ref.split("/", 1)
     r = fhir.read(rt, rid)
     owner = (r or {}).get("subject", {}).get("reference") or (r or {}).get("patient", {}).get("reference")
-    if not r or owner != f"Patient/{pid}":
+    if not r or (owner != f"Patient/{pid}" and not is_registry(r)):  # public registry entries are shared reference data
         raise HTTPException(404, "Record not found for this patient")
     audit.record(db, user.id, "doctor", "source.read", pid, ref)
     return M.SourceOut(reference=ref, type=rt, source=source_of(r), title=title_of(r), date=date_of(r), fields=fields_of(r),

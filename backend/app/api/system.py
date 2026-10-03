@@ -15,7 +15,10 @@ from app.settings import get_settings
 
 router = APIRouter(tags=["system"])
 
-DETAIL = {"anna": "52 · dry cough (live demo patient)", "piotr": "34 · knee pain, brief ready", "marek": "61 · safety-net case",
+DETAIL = {"natalia": "28 · ADHD follow-up (live demo patient)", "bartosz": "34 · ADHD follow-up, brief ready",
+          "kamila": "26 · ADHD, safety-net case", "michal": "31 · ADHD follow-up, not started",
+          "marta": "Psychiatrist, ADHD follow-ups today",
+          "anna": "52 · dry cough (GP)", "piotr": "34 · knee pain, brief ready", "marek": "61 · safety-net case",
           "halina": "74 · intake not started", "zofia": "29 · intake in progress", "tomasz": "45 · intake not started",
           "jan": "68 · Dr. Mazur's patient", "ewa": "GP, 6 visits today", "adam": "GP, 1 visit today"}
 

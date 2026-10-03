@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Info, ShieldAlert } from "lucide-react";
+import { TrendChart } from "@/components/TrendChart";
 import { CitationChip, Fact, SourceMark, StatusPill } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
@@ -87,7 +88,7 @@ export function BriefView({ p, onOpen, onChanged, fresh }: { p: DayPatient; onOp
       <div className="brief-head">
         <div>
           <h1>{p.name}</h1>
-          <div className="sub num">{p.age} · {p.sex === "female" ? t("sex.f") : t("sex.m")} · {p.time} · {t("brief.confirmed")}</div>
+          <div className="sub num">{p.age} · {p.sex === "female" ? t("sex.f") : t("sex.m")} · {p.time} · {p.visit} · {t("brief.confirmed")}</div>
         </div>
         <div className="actions">
           <StatusPill status={b.reviewed ? "reviewed" : "ready"} fresh={fresh} />
@@ -100,6 +101,7 @@ export function BriefView({ p, onOpen, onChanged, fresh }: { p: DayPatient; onOp
       <div className="legend">
         <span><SourceMark source="clinic" /> {t("source.clinic")}</span>
         <span><SourceMark source="patient" /> {t("source.patient")}</span>
+        <span><SourceMark source="registry" /> {t("source.registry")}</span>
         <span>{t("brief.legendHint")}</span>
       </div>
 
@@ -122,6 +124,15 @@ export function BriefView({ p, onOpen, onChanged, fresh }: { p: DayPatient; onOp
         </div>
       </div>
 
+      {b.followUp && (
+        <div className="sec"><h2>{t("brief.since")}</h2>
+          <div className="body">
+            <TrendChart data={b.followUp} />
+            {b.trends.map((f, i) => <Fact key={i} fact={f} onOpen={onOpen} />)}
+          </div>
+        </div>
+      )}
+
       <div className="sec"><h2>{t("brief.meds")}</h2>
         <div className="body">
           <MedicationTable rows={b.medications} pid={p.patientId} onOpen={onOpen} onReconciled={() => setTick((x) => x + 1)} />
@@ -135,6 +146,16 @@ export function BriefView({ p, onOpen, onChanged, fresh }: { p: DayPatient; onOp
             : <span className="small">{t("brief.noHistory")}</span>}
         </div>
       </div>
+
+      {(b.consistency.length > 0 || b.followUp) && (
+        <div className="sec"><h2>{t("brief.consistency")}</h2>
+          <div className="body">
+            <span className="small">{t("brief.consistencyNote")}</span>
+            {b.consistency.length ? b.consistency.map((f, i) => <Fact key={i} fact={f} onOpen={onOpen} />)
+              : <span className="small">{t("brief.consistencyNone")}</span>}
+          </div>
+        </div>
+      )}
 
       <div className="sec"><h2>{t("brief.lifestyle")}</h2>
         <div className="body">

@@ -210,6 +210,8 @@ class DayPatientOut(Out):
     briefFresh: bool = False  # created in the last 15 minutes (server clock)
     urgent: UrgentOut | None
     breakGlass: bool = False
+    visit: str = ""
+    checkinDays: int = 0
 
 
 class DayOut(Out):
@@ -220,7 +222,7 @@ class DayOut(Out):
 
 class CitationOut(Out):
     reference: str
-    source: Literal["clinic", "patient"]
+    source: Literal["clinic", "patient", "registry"]
     label: str
 
 
@@ -274,6 +276,49 @@ class GenerationOut(Out):
     hidden_unresolved: int = 0
 
 
+class TrendPointOut(Out):
+    date: str
+    ref: str | None
+    focus: int | None
+    sleepSelf: float | None
+    sleepDevice: float | None
+    restingHr: float | None
+    med: str | None
+    appetite: str | None
+    sideEffects: list[str]
+    triggers: list[str]
+    focusLost: list[str]
+    note: str | None
+
+
+class TrendEventOut(Out):
+    date: str
+    label: str
+    ref: str
+    active: bool
+
+
+class NoteOut(Out):
+    date: str
+    text: str
+    ref: str
+
+
+class FollowUpOut(Out):
+    since: str
+    split: str | None
+    splitLabel: str | None
+    series: list[TrendPointOut]
+    events: list[TrendEventOut]
+    listRef: str
+    notes: list[NoteOut]
+
+
+class TrendsOut(Out):
+    followUp: FollowUpOut | None
+    trends: list[FactOut]
+
+
 class BriefOut(Out):
     id: str
     patientId: str
@@ -287,6 +332,9 @@ class BriefOut(Out):
     relevantHistory: list[FactOut]
     lifestyle: list[LifestyleFactOut]
     openQuestions: list[str]
+    trends: list[FactOut] = []
+    consistency: list[FactOut] = []
+    followUp: FollowUpOut | None = None
     reviewed: ReviewOut | None
     generation: GenerationOut
 
@@ -294,7 +342,7 @@ class BriefOut(Out):
 class SourceOut(Out):
     reference: str
     type: str
-    source: Literal["clinic", "patient"]
+    source: Literal["clinic", "patient", "registry"]
     title: str
     date: str | None
     fields: list[tuple[str, str]]
@@ -326,6 +374,45 @@ class LlmCallOut(Out):
     outputTokens: int | None
     validation: str
     timestamp: str
+
+
+class CheckinOptionOut(Out):
+    value: str
+    label: str
+    exclusive: bool
+
+
+class CheckinItemOut(Out):
+    id: str
+    type: Literal["single", "multi", "scale", "free"]
+    text: str
+    optional: bool
+    low: str | None
+    high: str | None
+    options: list[CheckinOptionOut]
+
+
+class CheckinDefOut(Out):
+    id: str
+    title: str
+    intro: str
+    items: list[CheckinItemOut]
+
+
+class CheckinStateOut(Out):
+    enabled: bool
+    planTitle: str | None = None
+    since: str | None = None
+    today: str
+    todayDone: bool = False
+    questionnaire: CheckinDefOut | None = None
+    followUp: FollowUpOut | None = None
+    emergency: str | None = None
+
+
+class CheckinIn(BaseModel):
+    answers: dict[str, int | str | list[str]]
+    lang: Literal["en", "pl"] = "en"
 
 
 class SystemOut(Out):

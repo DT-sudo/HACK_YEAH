@@ -304,7 +304,73 @@ GENERAL = Category(
     extractors=ONSET_EXTRACT,
 )
 
-CATEGORIES: dict[str, Category] = {c.id: c for c in (RESPIRATORY, MUSCULOSKELETAL, HEADACHE, GENERAL)}
+ADHD_FOLLOWUP = Category(
+    id="adhd_followup",
+    subject_en="follow-up",
+    slots=[
+        Slot("overall", "Overall since the dose change", "single",
+             "Compared with before the latest dose change, how are things overall?",
+             "W porównaniu z okresem przed ostatnią zmianą dawki, jak jest ogólnie?", [
+                 Opt("Better", "Lepiej"), Opt("About the same", "Mniej więcej tak samo"), Opt("Worse", "Gorzej"),
+                 Opt("Hard to say", "Trudno powiedzieć")], discriminates=["dose_low", "dose_timing", "side_burden"], core=True),
+        Slot("med_adherence", "Medicine taken as planned", "single",
+             "How often have you taken the medicine as planned since then?",
+             "Jak często od tego czasu brałeś(-aś) lek zgodnie z planem?", [
+                 Opt("Every day", "Codziennie"), Opt("Missed a day or two", "Opuściłem(-am) dzień lub dwa"),
+                 Opt("Missed several days", "Opuściłem(-am) kilka dni"), Opt("I stopped taking it", "Przestałem(-am) brać")],
+             discriminates=["adherence"], core=True),
+        Slot("wear_off", "When the effect fades", "single", "When does the effect seem to fade?",
+             "Kiedy działanie zdaje się słabnąć?", [
+                 Opt("Before lunch", "Przed obiadem"), Opt("Early afternoon", "Wczesnym popołudniem"),
+                 Opt("Late afternoon", "Późnym popołudniem"), Opt("It doesn't fade", "Nie słabnie"),
+                 Opt("Not sure", "Nie wiem")], discriminates=["dose_timing", "dose_low"]),
+        Slot("side_effects", "Noticed since the dose change", "multi",
+             "Have you noticed any of these since the latest dose change? Choose all that apply.",
+             "Czy od ostatniej zmiany dawki zauważyłeś(-aś) coś z poniższych? Wybierz wszystkie pasujące.", [
+                 Opt("Lower appetite", "Mniejszy apetyt"), Opt("Trouble falling asleep", "Trudności z zaśnięciem"),
+                 Opt("Racing heart", "Kołatanie serca"), Opt("Headaches", "Bóle głowy"),
+                 Opt("Irritability or low mood", "Drażliwość lub obniżony nastrój"), Opt("None of these", "Nic z tych rzeczy")],
+             discriminates=["side_burden", "sleep_effect", "appetite_effect", "heart_effect", "mood_effect"], core=True),
+        Slot("sleep", "Sleep", "single", "How has your sleep been compared with before?",
+             "Jak wygląda Twój sen w porównaniu z wcześniej?", [
+                 Opt("Better", "Lepiej"), Opt("About the same", "Bez zmian"), Opt("Worse", "Gorzej")],
+             discriminates=["sleep_effect"]),
+        Slot("mood", "Mood most days", "single", "How has your mood been on most days?",
+             "Jaki był Twój nastrój przez większość dni?", [
+                 Opt("Mostly good", "Przeważnie dobry"), Opt("Up and down", "Zmienny"), Opt("Mostly low", "Przeważnie obniżony"),
+                 Opt("Anxious or on edge", "Niepokój lub napięcie")], discriminates=["mood_effect"]),
+        Slot("caffeine", "Caffeine", "single", "Has your coffee or energy-drink intake changed?",
+             "Czy zmieniło się to, ile pijesz kawy lub napojów energetycznych?", [
+                 Opt("More than before", "Więcej niż wcześniej"), Opt("About the same", "Bez zmian"),
+                 Opt("Less than before", "Mniej niż wcześniej"), Opt("I don't drink them", "Nie piję")],
+             discriminates=["heart_effect", "sleep_effect"]),
+        Slot("work_impact", "Impact on work or study (0–10)", "scale",
+             "How much do attention problems still get in the way at work or study, from 0 (not at all) to 10 (a lot)?",
+             "Na ile problemy z uwagą wciąż przeszkadzają w pracy lub nauce, od 0 (wcale) do 10 (bardzo)?", core=True),
+        Slot("wishes", "Wants to discuss", "free", "Is there anything you'd like to talk about or change at the visit?",
+             "Czy jest coś, o czym chcesz porozmawiać lub co chcesz zmienić podczas wizyty?", core=True),
+    ],
+    hypotheses=[Hypothesis("dose_low"), Hypothesis("dose_timing"), Hypothesis("adherence"), Hypothesis("side_burden"),
+                Hypothesis("sleep_effect"), Hypothesis("appetite_effect"), Hypothesis("heart_effect"), Hypothesis("mood_effect")],
+    rules=[
+        Rule("overall", lambda v: _has(v, "Better"), "dose_low"),
+        Rule("med_adherence", lambda v: _has(v, "Every day"), "adherence"),
+        Rule("side_effects", lambda v: _has(v, "None of these"), "side_burden"),
+        Rule("side_effects", lambda v: _lacks(v, "asleep"), "sleep_effect"),
+        Rule("side_effects", lambda v: _lacks(v, "appetite"), "appetite_effect"),
+        Rule("side_effects", lambda v: _lacks(v, "Racing"), "heart_effect"),
+        Rule("side_effects", lambda v: _lacks(v, "Irritab"), "mood_effect"),
+        Rule("wear_off", lambda v: _has(v, "doesn't fade"), "dose_timing"),
+    ],
+    extractors=[
+        (r"\bafternoon|\bpopoludni", "wear_off", "Late afternoon"),
+        (r"\bbetter\b|\blepiej", "overall", "Better"),
+        (r"\bworse\b|\bgorzej", "overall", "Worse"),
+        (r"\bsleep(ing)? (badly|poorly|worse)|\bslabo spie|\bgorzej spie", "sleep", "Worse"),
+    ],
+)
+
+CATEGORIES: dict[str, Category] = {c.id: c for c in (RESPIRATORY, MUSCULOSKELETAL, HEADACHE, GENERAL, ADHD_FOLLOWUP)}
 CATEGORIES["abdominal"] = GENERAL  # framework questionnaire covers it in the hackathon build
 
 
@@ -312,6 +378,15 @@ def complaint_slot(lang: str, first_name: str, doctor: str) -> dict:
     text = (f"Dzień dobry, {first_name}. Proszę opisać własnymi słowami, z czym zgłasza się Pan/Pani na wizytę ({doctor})."
             if lang == "pl" else
             f"Hi {first_name}. In your own words, what would you like to talk to {doctor} about?")
+    return {"slot": "complaint", "text": text, "answer_type": "free", "options": []}
+
+
+def followup_opening(lang: str, first_name: str, doctor: str) -> dict:
+    """Opening question for a follow-up visit of a known condition (category set from the appointment)."""
+    text = (f"Dzień dobry, {first_name}. Przed wizytą kontrolną ({doctor}): jak się sprawy mają od ostatniej wizyty? "
+            "Proszę opisać własnymi słowami." if lang == "pl" else
+            f"Hi {first_name}. Before your follow-up with {doctor}: how have things been since the last visit? "
+            "In your own words.")
     return {"slot": "complaint", "text": text, "answer_type": "free", "options": []}
 
 

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import copy
 import itertools
+import logging
 import threading
+import time
 from typing import Any, Protocol
 
 import httpx
@@ -18,6 +20,7 @@ import httpx
 from app.settings import get_settings, iso_now
 
 Resource = dict[str, Any]
+log = logging.getLogger("vitalcontext.fhir")
 
 PATIENT_REF_PATHS = ("subject", "patient", "beneficiary")
 DOCUMENTED_TAG = {"system": "https://vitalcontext.example/tags", "code": "documented"}
@@ -123,13 +126,32 @@ class LocalFhirStore:
 
 
 class HapiFhirStore:
-    """Minimal REST client for HAPI FHIR (R4). Used when VC_FHIR_BACKEND=hapi."""
+    """REST client for HAPI FHIR (R4). Used when VC_FHIR_BACKEND=hapi (docker compose)."""
 
     SEARCH_PARAM = {"AllergyIntolerance": "patient", "Appointment": "patient"}
+    # Everything the demo creates; wiped on reset so the demo always starts from the same state.
+    DEMO_TYPES = ["Provenance", "Composition", "QuestionnaireResponse", "Appointment", "MedicationStatement",
+                  "MedicationRequest", "Observation", "AllergyIntolerance", "DocumentReference", "Encounter",
+                  "Condition", "Patient", "Practitioner", "Organization"]
 
     def __init__(self, base_url: str) -> None:
-        self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=15.0,
+        self._base = base_url.rstrip("/")
+        self._http = httpx.Client(base_url=self._base, timeout=30.0,
                                   headers={"Accept": "application/fhir+json", "Content-Type": "application/fhir+json"})
+
+    def wait_until_ready(self, timeout_s: float = 300) -> None:
+        """HAPI needs a minute or two to boot; the API waits instead of crashing."""
+        deadline = time.monotonic() + timeout_s
+        while True:
+            try:
+                if self._http.get("/metadata", timeout=5).status_code == 200:
+                    return
+            except httpx.HTTPError:
+                pass
+            if time.monotonic() > deadline:
+                raise RuntimeError(f"FHIR server at {self._base} not ready after {timeout_s:.0f}s")
+            log.info("waiting for FHIR server at %s ...", self._base)
+            time.sleep(3)
 
     def read(self, rtype: str, rid: str) -> Resource | None:
         r = self._http.get(f"/{rtype}/{rid}")
@@ -138,28 +160,38 @@ class HapiFhirStore:
         r.raise_for_status()
         return r.json()
 
+    def _search_all(self, rtype: str, params: dict[str, str]) -> list[Resource]:
+        out: list[Resource] = []
+        r = self._http.get(f"/{rtype}", params={"_count": "200", **params})
+        while True:
+            r.raise_for_status()
+            bundle = r.json()
+            out += [e["resource"] for e in bundle.get("entry", []) if e.get("resource", {}).get("resourceType") == rtype]
+            nxt = next((l["url"] for l in bundle.get("link", []) if l.get("relation") == "next"), None)
+            if not nxt:
+                return out
+            r = self._http.get(nxt)
+
     def search(self, rtype: str, patient: str | None = None) -> list[Resource]:
-        params: dict[str, str] = {"_count": "500"}
-        if patient:
-            params[self.SEARCH_PARAM.get(rtype, "subject")] = patient
-        r = self._http.get(f"/{rtype}", params=params)
-        r.raise_for_status()
-        return [e["resource"] for e in r.json().get("entry", [])]
+        params = {self.SEARCH_PARAM.get(rtype, "subject"): patient} if patient else {}
+        return self._search_all(rtype, params)
 
     def create(self, resource: Resource) -> Resource:
         if resource.get("id"):  # client-assigned ids keep seeds stable
             return self.update(resource)
         r = self._http.post(f"/{resource['resourceType']}", json=resource)
-        r.raise_for_status()
+        self._raise(r)
         return r.json()
 
     def update(self, resource: Resource) -> Resource:
         r = self._http.put(f"/{resource['resourceType']}/{resource['id']}", json=resource)
-        r.raise_for_status()
+        self._raise(r)
         return r.json()
 
     def delete(self, rtype: str, rid: str) -> None:
-        self._http.delete(f"/{rtype}/{rid}").raise_for_status()
+        r = self._http.delete(f"/{rtype}/{rid}")
+        if r.status_code not in (200, 204, 404, 410):
+            self._raise(r)
 
     def history(self, rtype: str, rid: str) -> list[Resource]:
         r = self._http.get(f"/{rtype}/{rid}/_history")
@@ -167,9 +199,19 @@ class HapiFhirStore:
         return [e["resource"] for e in r.json().get("entry", [])][::-1]
 
     def reset(self) -> None:
-        # Seed data uses fixed ids, so re-seeding overwrites it. Resources created during a demo stay
-        # in HAPI; for a clean slate recreate its volume (`docker compose down -v`).
-        pass
+        for rtype in self.DEMO_TYPES:
+            for res in self._search_all(rtype, {"_elements": "id"}):
+                self.delete(rtype, res["id"])
+
+    @staticmethod
+    def _raise(r: httpx.Response) -> None:
+        if r.is_error:
+            detail = ""
+            try:
+                detail = "; ".join(i.get("diagnostics", "") for i in r.json().get("issue", []))
+            except ValueError:
+                pass
+            raise RuntimeError(f"FHIR {r.request.method} {r.request.url.path} -> {r.status_code}: {detail[:300]}")
 
 
 _store: FhirStore | None = None

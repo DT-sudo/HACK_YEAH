@@ -28,7 +28,7 @@ type Ctx = {
 
 const AppContext = createContext<Ctx | null>(null);
 
-const DEFAULT_USERS: Record<Role, string> = { patient: "anna", doctor: "ewa" };
+const DEFAULT_USERS: Record<Role, string> = { patient: "natalia", doctor: "marta" };
 
 function readPref<T extends string>(key: string, fallback: T): T {
   try {

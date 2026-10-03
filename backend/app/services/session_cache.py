@@ -66,5 +66,9 @@ def discard(session_id: str) -> None:
 
 
 def clear_all() -> None:
-    if isinstance(_store(), _Memory):
-        _store().flushdb()
+    store = _store()
+    if isinstance(store, _Memory):
+        store.flushdb()
+    else:
+        for key in store.scan_iter("hyp:*"):
+            store.delete(key)

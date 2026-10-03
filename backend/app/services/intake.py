@@ -46,6 +46,7 @@ class Appointment:
     practitioner_ref: str
     practitioner_name: str
     service: str
+    visit_type: str | None = None  # e.g. "adhd-followup": sets the intake category up front
 
 
 def upcoming_appointment(fhir: FhirStore, patient_id: str) -> Appointment | None:
@@ -54,8 +55,12 @@ def upcoming_appointment(fhir: FhirStore, patient_id: str) -> Appointment | None
         return None
     a = sorted(appts, key=lambda x: x.get("start", ""))[0]
     prac = next((p["actor"] for p in a.get("participant", []) if p["actor"]["reference"].startswith("Practitioner/")), {})
+    st = (a.get("serviceType") or [{}])[0]
     return Appointment(a["id"], a["start"], prac.get("reference", ""), prac.get("display", "your doctor"),
-                       (a.get("serviceType") or [{}])[0].get("text", "Visit"))
+                       st.get("text", "Visit"), next((c.get("code") for c in st.get("coding", [])), None))
+
+
+FOLLOWUP_CATEGORY = {"adhd-followup": "adhd_followup"}
 
 
 def latest_session(db: Session, patient_id: str, appointment_id: str) -> IntakeSession | None:
@@ -77,9 +82,11 @@ def start_or_resume(db: Session, fhir: FhirStore, user: User, patient_id: str, l
     if s and s.state in ("EMERGENCY", "SUBMITTED", "CONFIRMED_BY_PATIENT"):
         return s
     first = user.display_name.split()[0]
-    q = framework.complaint_slot(lang, first, appt.practitioner_name)
+    category = FOLLOWUP_CATEGORY.get(appt.visit_type or "")
+    q = (framework.followup_opening(lang, first, appt.practitioner_name) if category
+         else framework.complaint_slot(lang, first, appt.practitioner_name))
     s = IntakeSession(id=f"in-{uuid.uuid4().hex[:10]}", patient_id=patient_id, appointment_id=appt.id, state="STARTED",
-                      lang=lang, transcript=[{"from": "ai", "text": q["text"], "at": iso_now()}], answers=[],
+                      lang=lang, category=category, transcript=[{"from": "ai", "text": q["text"], "at": iso_now()}], answers=[],
                       current_question=q, question_count=0, flags={}, created_at=now(), updated_at=now())
     db.add(s)
     db.commit()
@@ -145,6 +152,9 @@ def post_message(db: Session, fhir: FhirStore, user: User, s: IntakeSession, tex
         answers[ea.slot] = {"slot": ea.slot, "label": ea.label, "value": ea.value}
     if q.get("slot") == "complaint":
         answers["complaint"] = {"slot": "complaint", "label": "Reason for visit", "value": text, "verbatim": True}
+    elif q.get("answer_type") == "free" and q.get("slot"):  # free text is the patient's own words: verbatim
+        answers[q["slot"]] = {"slot": q["slot"], "label": q.get("label") or q["slot"].replace("_", " ").capitalize(),
+                              "value": text, "verbatim": True}
     elif q.get("slot") and q["slot"] not in answers:
         answers[q["slot"]] = {"slot": q["slot"], "label": q.get("label") or q["slot"].replace("_", " ").capitalize(), "value": text}
     s.answers = list(answers.values())
