@@ -12,6 +12,61 @@ Original clickable prototype: [`vitalcontext/index.html`](vitalcontext/index.htm
 
 All patients are synthetic. No real patient data is used.
 
+## How to run
+
+There are two ways to run the app: with Docker (Option A) or without Docker (Option B). Both
+work on macOS, Linux and Windows and open the app at http://localhost:3000. You also need
+Git (https://git-scm.com/downloads) to download the code.
+
+### Option A: with Docker
+
+1. Install Docker.
+   - macOS / Windows: install Docker Desktop (https://www.docker.com/products/docker-desktop/) and
+     start it.
+   - Linux: install Docker Engine (https://docs.docker.com/engine/install/) with the Compose plugin.
+2. Download the code and start the app. Open a terminal (on Windows: PowerShell) and run:
+
+       git clone https://github.com/DT-sudo/HACK_YEAH.git
+       cd HACK_YEAH
+       docker compose up
+
+   The first start needs internet and takes a few minutes. Later starts are fast and work offline.
+3. Open http://localhost:3000 in a browser.
+4. To stop, press Ctrl+C in the terminal.
+
+### Option B: without Docker
+
+1. Install Node.js 22 or newer from https://nodejs.org.
+2. Install uv. It installs Python 3.13 for you.
+   - macOS / Linux (Terminal):
+
+         curl -LsSf https://astral.sh/uv/install.sh | sh
+
+   - Windows (PowerShell):
+
+         powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+   Then close the terminal and open a new one.
+3. Download the code:
+
+       git clone https://github.com/DT-sudo/HACK_YEAH.git
+       cd HACK_YEAH
+
+4. Start the API. In this terminal, run the commands below and leave it running:
+
+       cd backend
+       uv sync
+       uv run uvicorn app.main:app --port 8000
+
+5. Start the web app. Open a second terminal, go to the HACK_YEAH folder, and run:
+
+       cd frontend
+       npm install
+       npm run dev
+
+6. Open http://localhost:3000 in a browser.
+7. To stop, press Ctrl+C in both terminals.
+
 ## Who it's for (MVP scope)
 
 **Tech-literate adults aged 25–40 managing a newly diagnosed condition between visits.** The demo case is
