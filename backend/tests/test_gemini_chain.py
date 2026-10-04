@@ -85,3 +85,11 @@ def test_other_client_errors_are_not_swallowed(provider):
 
 def test_retry_after_defaults_without_retry_info():
     assert gp.retry_after(errors.ClientError(429, {"error": {"code": 429, "message": "q"}})) == gp.QUOTA_COOLDOWN_S
+
+
+def test_missing_key_runs_on_offline_engine(monkeypatch):
+    from app.llm.gateway import LLMGateway
+    monkeypatch.setattr(get_settings(), "gemini_api_key", None)
+    for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    assert LLMGateway(provider="gemini").provider_name == "mock"
