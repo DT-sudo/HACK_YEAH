@@ -151,7 +151,7 @@ Without Docker, copy `backend/.env.example` to `backend/.env`.
 
 ## Demo script (≈3 minutes, ADHD follow-up)
 
-Defaults: patient **Natalia Zając** (28, methylphenidate ER, dose raised 18 → 27 mg on 17 Sep) and
+Defaults: patient **Natalia Zając** (33, methylphenidate ER, dose raised 18 → 27 mg on 17 Sep) and
 doctor **Dr. Marta Kaczmarek** (psychiatrist).
 
 1. **Patient app → Daily.** Do today's check-in: medicine, focus 0–10, when focus dropped, triggers,

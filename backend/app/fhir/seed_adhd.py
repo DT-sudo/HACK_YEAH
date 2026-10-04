@@ -1,7 +1,7 @@
 """Synthetic ADHD follow-up scenario (target group: tech-literate adults 25-40 managing a newly
 diagnosed condition between visits). Psychiatry day for Dr. Marta Kaczmarek, Monday 5 Oct 2026.
 
-Natalia Zając (28) is the live demo patient: methylphenidate ER titrated 18 -> 27 mg on 17 Sep,
+Natalia Zając (33) is the live demo patient: methylphenidate ER titrated 18 -> 27 mg on 17 Sep,
 27 days of daily check-ins and wearable aggregates, pre-visit chat not done yet.
 """
 from __future__ import annotations
