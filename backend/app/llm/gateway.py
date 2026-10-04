@@ -42,17 +42,10 @@ class LLMGateway:
     def __init__(self, provider: str | None = None) -> None:
         self.fallback = MockProvider()
         name = provider or get_settings().resolved_llm_provider
-        try:
-            if name == "anthropic":
-                from app.llm.anthropic_provider import AnthropicProvider
-                self.provider = AnthropicProvider()
-            elif name == "gemini":
-                from app.llm.gemini_provider import GeminiProvider
-                self.provider = GeminiProvider()
-            else:
-                self.provider = self.fallback
-        except Exception as e:  # e.g. no API key: run on the offline engine instead of failing every request
-            log.warning("llm provider %s unavailable (%s), using the offline engine", name, e)
+        if name == "anthropic":
+            from app.llm.anthropic_provider import AnthropicProvider
+            self.provider = AnthropicProvider()
+        else:
             self.provider = self.fallback
 
     @property
