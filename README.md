@@ -69,7 +69,7 @@ Git (https://git-scm.com/downloads) to download the code.
 
 ## Who it's for (MVP scope)
 
-**Tech-literate adults aged 25–40 managing a newly diagnosed condition between visits.** The demo case is
+**Tech-literate adults aged 30–60 managing a newly diagnosed condition between visits.** The demo case is
 ADHD medication titration, where the psychiatrist needs to know what happened day by day since the last
 visit: focus, sleep, appetite, side effects, missed doses. Between visits the patient does a one-minute
 daily check-in; before the visit, a short AI-guided chat. The doctor gets:
@@ -138,9 +138,10 @@ cd frontend && npm install && npm run dev
 
 | `VC_LLM_PROVIDER` | What runs |
 |---|---|
-| `auto` (default) | Claude (`claude-opus-5`) when `ANTHROPIC_API_KEY` is set, otherwise the offline engine |
+| `auto` (default) | Claude (`claude-opus-5`) when `ANTHROPIC_API_KEY` is set, else Gemini when `VC_GEMINI_API_KEY` / `GEMINI_API_KEY` is set, otherwise the offline engine |
 | `mock` | Offline, deterministic rule engine: same JSON contracts and validation, no network |
 | `anthropic` | Claude through the Anthropic SDK, structured JSON output, no tools |
+| `gemini` | Gemini through the Google Gen AI SDK, structured JSON output, no tools. `VC_GEMINI_MODELS` is a fallback chain (default `gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash`): free-tier quota is per model, so a model that hits its quota is skipped until Google says it resets |
 
 The offline engine is also the **safe fallback**. If the model is unavailable or its output fails
 validation twice, the intake continues with the framework questionnaire and the brief is built by rules.

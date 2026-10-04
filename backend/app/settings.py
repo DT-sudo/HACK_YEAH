@@ -26,8 +26,12 @@ class Settings(BaseSettings):
     redis_url: str | None = None  # optional; in-process TTL cache otherwise
 
     # LLM
-    llm_provider: str = "auto"  # auto | mock | anthropic
+    llm_provider: str = "gemini"  # auto | mock | anthropic | gemini
     anthropic_model: str = "claude-opus-5"
+    gemini_model: str = "gemini-3.5-flash-lite"
+    # Fallback chain, comma-separated: on a quota error the next model is used. Overrides gemini_model.
+    gemini_models: str = "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash"
+    gemini_api_key: str | None = None  # or GEMINI_API_KEY in the environment
     llm_timeout_s: float = 45.0
     intake_question_limit: int = 12
 
@@ -38,10 +42,19 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     @property
+    def gemini_model_chain(self) -> list[str]:
+        chain = [m.strip() for m in self.gemini_models.split(",") if m.strip()]
+        return list(dict.fromkeys(chain)) or [self.gemini_model]
+
+    @property
     def resolved_llm_provider(self) -> str:
         if self.llm_provider != "auto":
             return self.llm_provider
-        return "anthropic" if os.environ.get("ANTHROPIC_API_KEY") else "mock"
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            return "anthropic"
+        if self.gemini_api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+            return "gemini"
+        return "mock"
 
 
 @lru_cache

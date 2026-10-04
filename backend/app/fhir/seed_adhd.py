@@ -22,8 +22,8 @@ QID = "vc-daily-adhd-v1"
 
 # login, pid, given, family, gender, birth, pesel, time, demo hint
 PATIENTS = [
-    ("kamila", "kamila-n", "Kamila", "Nowicka", "female", "2000-03-02", "00230200000", "09:00", None),
-    ("natalia", "natalia-z", "Natalia", "Zając", "female", "1998-06-11", "98061100000", "09:30",
+    ("kamila", "kamila-n", "Kamila", "Nowicka", "female", "1994-03-02", "94030200000", "09:00", None),
+    ("natalia", "natalia-z", "Natalia", "Zając", "female", "1993-06-11", "93061100000", "09:30",
      "Focus is much better on the higher dose, but it wears off in the afternoon and I sleep badly"),
     ("bartosz", "bartosz-k", "Bartosz", "Kowal", "male", "1992-01-25", "92012500000", "10:15", None),
     ("michal", "michal-g", "Michał", "Grabowski", "male", "1995-09-30", "95093000000", "11:00",

@@ -45,6 +45,9 @@ class LLMGateway:
         if name == "anthropic":
             from app.llm.anthropic_provider import AnthropicProvider
             self.provider = AnthropicProvider()
+        elif name == "gemini":
+            from app.llm.gemini_provider import GeminiProvider
+            self.provider = GeminiProvider()
         else:
             self.provider = self.fallback
 

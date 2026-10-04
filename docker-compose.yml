@@ -6,8 +6,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.hapi.yml up --build
 # No real patient data is ever used.
 #
-# Optional: put ANTHROPIC_API_KEY in a .env file next to this one to use Claude instead of the
-# offline rule engine.
+# The LLM is Gemini: put VC_GEMINI_API_KEY in a .env file next to this one. Without a key the
+# intake falls back to the offline rule engine.
 name: vitalcontext
 
 services:
@@ -30,7 +30,9 @@ services:
       VC_REDIS_URL: redis://redis:6379/0
       VC_JWT_SECRET: ${VC_JWT_SECRET:-demo-only-secret-change-me-for-anything-real}
       VC_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      VC_LLM_PROVIDER: ${VC_LLM_PROVIDER:-auto}
+      VC_LLM_PROVIDER: ${VC_LLM_PROVIDER:-gemini}
+      VC_GEMINI_MODELS: ${VC_GEMINI_MODELS:-gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash}
+      VC_GEMINI_API_KEY: ${VC_GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports: ["8000:8000"]
     depends_on:

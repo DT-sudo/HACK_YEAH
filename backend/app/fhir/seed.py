@@ -31,13 +31,13 @@ DOCTORS = [
 ]
 # login, given, family, gender, birthDate, fake PESEL, doctor, time, demo suggestion
 PATIENTS = [
-    ("marek", "Marek", "Zieliński", "male", "1965-02-11", "65021100000", "ewa", "08:00", None),
-    ("halina", "Halina", "Dąbrowska", "female", "1952-07-30", "52073000000", "ewa", "08:20", "I get dizzy when I stand up"),
+    ("marek", "Marek", "Zieliński", "male", "1967-02-11", "67021100000", "ewa", "08:00", None),
+    ("halina", "Halina", "Dąbrowska", "female", "1968-07-30", "68073000000", "ewa", "08:20", "I get dizzy when I stand up"),
     ("piotr", "Piotr", "Nowak", "male", "1992-04-19", "92041900000", "ewa", "09:00", "My right knee hurts at the front when I run"),
-    ("zofia", "Zofia", "Lewandowska", "female", "1997-01-08", "97010800000", "ewa", "09:20", "I've had headaches most mornings"),
+    ("zofia", "Zofia", "Lewandowska", "female", "1995-01-08", "95010800000", "ewa", "09:20", "I've had headaches most mornings"),
     ("anna", "Anna", "Kowalska", "female", "1974-03-14", "74031400000", "ewa", "10:20", "I've had a dry cough for a few weeks"),
     ("tomasz", "Tomasz", "Wójcik", "male", "1981-11-02", "81110200000", "ewa", "11:00", "My lower back hurts after work"),
-    ("jan", "Jan", "Kamiński", "male", "1958-05-21", "58052100000", "adam", "09:40", None),
+    ("jan", "Jan", "Kamiński", "male", "1967-05-21", "67052100000", "adam", "09:40", None),
 ]
 PID = {"anna": "anna-k", "piotr": "piotr-n", "marek": "marek-z", "halina": "halina-d", "zofia": "zofia-l",
        "tomasz": "tomasz-w", "jan": "jan-k"}

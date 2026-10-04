@@ -606,12 +606,12 @@ function patientView(){
 
 /* ================= Doctor dashboard ================= */
 const DAY = [
-  {id:'marek',t:'08:00',name:'Marek Zieliński',age:61,sex:'M',status:'urgent',urgentText:'Chest pain reported in intake chat at 07:42. Patient was told to call 112 and the chat stopped.'},
-  {id:'halina',t:'08:20',name:'Halina Dąbrowska',age:74,sex:'F',status:'none'},
+  {id:'marek',t:'08:00',name:'Marek Zieliński',age:59,sex:'M',status:'urgent',urgentText:'Chest pain reported in intake chat at 07:42. Patient was told to call 112 and the chat stopped.'},
+  {id:'halina',t:'08:20',name:'Halina Dąbrowska',age:58,sex:'F',status:'none'},
   {id:'piotr',t:'09:00',name:'Piotr Nowak',age:34,sex:'M',status:'ready'},
-  {id:'zofia',t:'09:20',name:'Zofia Lewandowska',age:29,sex:'F',status:'progress'},
+  {id:'zofia',t:'09:20',name:'Zofia Lewandowska',age:31,sex:'F',status:'progress'},
   {id:'anna',t:'10:20',name:'Anna Kowalska',age:52,sex:'F',status:'ready'},
-  {id:'tomasz',t:'11:00',name:'Tomasz Wójcik',age:45,sex:'M',status:'none'}
+  {id:'tomasz',t:'11:00',name:'Tomasz Wójcik',age:44,sex:'M',status:'none'}
 ];
 function statusOf(p){
   if(p.id==='anna' && S.urgent) return 'urgent';

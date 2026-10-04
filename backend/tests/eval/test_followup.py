@@ -79,4 +79,4 @@ def test_live_followup_intake_and_consistency(client, login):
     from app.fhir.client import get_fhir
     from app.services.context import build_context_pack
     pack = str(build_context_pack(get_fhir(), "natalia-z", "adhd_followup").pack)
-    assert "Coffee at 4 pm" not in pack and "Natalia" not in pack and "98061100000" not in pack
+    assert "Coffee at 4 pm" not in pack and "Natalia" not in pack and "93061100000" not in pack
